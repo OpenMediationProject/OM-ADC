@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="cn">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Threads</title>
+    <style>
+        body {
+            background-color: #eee;
+        }
+
+        table, th, td {
+            border: 1px solid;
+            border-collapse: collapse;
+            padding: 5px;
+        }
+
+        input {
+            width: 20em;
+            padding: 5px 10px;
+            font-size: .7em;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+<div align="center">
+    <div style="padding-bottom: 10px;">
+        <form>
+            <label>Filter:
+                <input type="text" name="filter">
+            </label>
+        </form>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>State</th>
+            <th>STSize</th>
+            <th>StackTrace</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+<script>'use strict';
+
+function st(ele) {
+    var p = ele.firstChild;
+    if (p.style.display === 'none') {
+        p.style.display = 'inline';
+    } else {
+        p.style.display = 'none';
+    }
+}
+
+var d = function (q) {
+    return document.querySelector(q);
+}, da = function (q) {
+    return document.querySelectorAll(q);
+}, c = function (t) {
+    return document.createElement(t);
+}, filter = function (v) {
+    var trs = da('tbody tr');
+    for (var i = 0; i < trs.length; i++) {
+        var tr = trs.item(i),
+            name = tr.firstChild.textContent;
+        tr.style.display = name.match(v) ? 'table-row' : 'none';
+    }
+}, render = function (o) {
+    var tbody = d('tbody');
+    o.threads.forEach(function (t) {
+        var tr = c('tr'),
+            name = c('td'),
+            state = c('td'),
+            size = c('td'),
+            trace = c('td');
+        name.innerHTML = t.threadName;
+        state.innerHTML = t.threadState;
+        size.innerHTML = t.stackTrace.length;
+        trace.style.cursor = 'pointer';
+        trace.setAttribute('onclick', 'st(this)');
+
+        var trace_arr = t.stackTrace.map(function (st) {
+            var s = st.className + '.' + st.methodName + '(';
+            if (st.nativeMethod)
+                s += 'Native Method)';
+            else
+                s += st.fileName + ':' + st.lineNumber + ')';
+            return s;
+        });
+
+        trace.innerHTML = '<pre style="display: none;">' + trace_arr.join('\n') + '</pre>';
+        tr.appendChild(name);
+        tr.appendChild(state);
+        tr.appendChild(size);
+        tr.appendChild(trace);
+        tbody.appendChild(tr);
+    });
+
+    if (location.hash) {
+        var v = location.hash.substr(1);
+        d('form input').value = v;
+        filter(v);
+    }
+};
+
+fetch('holy/threaddump').then(function (res) {
+    return res.json();
+}).then(render).catch(function (reason) {
+    alert('get info error: ' + reason);
+});
+
+d('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = this.filter.value;
+    location.hash = '#' + v;
+    filter(v);
+});
+</script>
+</body>
+</html>

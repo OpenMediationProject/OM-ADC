@@ -1,0 +1,54 @@
+server:
+  port: 19014
+  compression:
+    enabled: true
+    min-response-size: 200
+  http2:
+    enabled: true
+  servlet:
+    application-display-name: om-adc
+    session:
+      timeout: 1m
+  tomcat:
+    basedir: .
+
+spring:
+  ## scheduling
+  task:
+    scheduling:
+      pool:
+        size: 10
+  ## freemarker
+  freemarker:
+    charset: UTF-8
+    settings:
+      dateFormat: yyyy-MM-dd
+      datetime_format: yyyy-MM-dd HH:mm:ss
+      whitespaceStripping: true
+      numberFormat: 0.##
+  ## jackson
+  jackson:
+    parser:
+      ALLOW_SINGLE_QUOTES: true
+      ALLOW_UNQUOTED_FIELD_NAMES: true
+    deserialization:
+      FAIL_ON_UNKNOWN_PROPERTIES: false
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: true
+    default-property-inclusion: non_null
+    generator:
+      AUTO_CLOSE_TARGET: false
+      IGNORE_UNKNOWN: true
+
+  profiles:
+    active: dev
+
+management:
+  endpoint:
+    httptrace:
+      enabled: false
+  endpoints:
+    web:
+      base-path: /holy
+      exposure:
+        include: metrics,loggers,threaddump
