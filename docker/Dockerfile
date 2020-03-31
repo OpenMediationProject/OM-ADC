@@ -3,9 +3,9 @@ MAINTAINER openmediation
 ENV SYSTEMNAME "omsystem"
 ENV SERVERNAME "om-adc"
 RUN mkdir ${SERVERNAME}
+ADD docker-entrypoint.sh /
+ADD application-loc.yml /${SERVERNAME}
 ARG JAR_FILE
-ADD ./docker/docker-entrypoint.sh /
-ADD ./docker/application-loc.yml /${SERVERNAME}
 ADD ${JAR_FILE} /${SERVERNAME}
 WORKDIR /
 HEALTHCHECK --interval=30s --timeout=3s \
