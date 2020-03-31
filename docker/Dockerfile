@@ -2,11 +2,11 @@ FROM adtiming/omjava
 MAINTAINER openmediation
 ENV SYSTEMNAME "omsystem"
 ENV SERVERNAME "om-adc"
-ARG JAR_FILE
 RUN mkdir ${SERVERNAME}
-ADD docker-entrypoint.sh /
-ADD application-loc.yml /${SERVERNAME}
-COPY ${JAR_FILE} /${SERVERNAME}/om-adc.jar
+ARG JAR_FILE
+ADD docker/docker-entrypoint.sh /
+ADD docker/application-loc.yml /${SERVERNAME}
+ADD ${JAR_FILE} /${SERVERNAME}
 WORKDIR /
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD curl -f http://localhost:19014/ || exit 1

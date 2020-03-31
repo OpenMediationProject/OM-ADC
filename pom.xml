@@ -184,11 +184,11 @@
                 <configuration>
                     <dockerfile>${docker.dockerfile}</dockerfile>
                     <repository>${docker.registry}/${docker.repo.package}/${project.artifactId}</repository>
-                    <contextDirectory>./docker</contextDirectory>
-                    <buildDirectory>./docker</buildDirectory>
+                    <contextDirectory>./</contextDirectory>
+                    <buildDirectory>./</buildDirectory>
                     <tag>latest</tag>
                     <buildArgs>
-                        <JAR_FILE>../target/${project.build.finalName}.jar</JAR_FILE>
+                        <JAR_FILE>target/${project.build.finalName}.jar</JAR_FILE>
                     </buildArgs>
                 </configuration>
             </plugin>
