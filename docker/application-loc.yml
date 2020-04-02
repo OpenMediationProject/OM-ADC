@@ -7,7 +7,7 @@ logging:
 http.proxy: 
 auth:
   dir: auth
-  domain: 127.0.0.1
+  domain: 127.0.0.1/api
 download.dir: download
 
 spring:
