@@ -81,7 +81,7 @@ do
         fi
         if [[ ${item_name} = "dsserverip" ]];then
             loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "/domain/s/127.0.0.1/${!env_var}/g" ${CONFILE}/application-loc.yml
+            sed -i "/domain/s/127.0.0.1:19013/${!env_var}/g" ${CONFILE}/application-loc.yml
             continue
         fi
         if [[ ${item_name} = "httpproxy" ]];then
