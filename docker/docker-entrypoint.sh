@@ -81,7 +81,7 @@ do
         fi
         if [[ ${item_name} = "dsserverdomain" ]];then
             loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "/domain/s/domain:.*/domain: ${!env_var}/g" ${CONFILE}/application-loc.yml
+            sed -i "/domain/s@domain:.*@domain: ${!env_var}@g" ${CONFILE}/application-loc.yml
             continue
         fi
         if [[ ${item_name} = "httpproxy" ]];then
