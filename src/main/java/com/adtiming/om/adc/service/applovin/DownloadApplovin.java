@@ -100,7 +100,7 @@ public class DownloadApplovin extends AdnBaseService {
                 "%2Cecpm%2Ccountry%2Cad_type%2Csize%2Cdevice_type%2Cplatform%2Capplication%2Cpackage_name%2Cplacement" +
                 "%2Capplication_is_hidden%2Czone%2Czone_id" +
                 "&format=json&start=" + day + "&end=" + day;
-        String json_data = "";
+        String jsonData = "";
         HttpEntity entity = null;
         LOG.info("[Applovin] downJsonData start, taskId:{}, appId:{}, apiKey:{}, day:{}", taskId, appId, apiKey, day);
         LOG.info("[Applovin] request url:{}", url);
@@ -109,41 +109,40 @@ public class DownloadApplovin extends AdnBaseService {
             updateReqUrl(jdbcTemplate, taskId, url);
             LOG.info("Applovin:" + LocalDateTime.now().toLocalTime());
             HttpGet httpGet = new HttpGet(url);
-            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();//设置请求和传输超时时间
+            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();
             httpGet.setConfig(requestConfig);
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             StatusLine sl = response.getStatusLine();
-            if (sl.getStatusCode() != 200) {
-                err.append(String.format("request report response statusCode:%d", sl.getStatusCode()));
-                return json_data;
-            }
-
             entity = response.getEntity();
+            if (sl.getStatusCode() != 200) {
+                err.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
+                return jsonData;
+            }
             if (entity == null) {
                 err.append("request report response enity is null");
-                return json_data;
+                return jsonData;
             }
-            json_data = EntityUtils.toString(entity);
+            jsonData = EntityUtils.toString(entity);
         } catch (Exception ex) {
             err.append(String.format("downJsonData error,msg:%s", ex.getMessage()));
         } finally {
             EntityUtils.consumeQuietly(entity);
         }
         LOG.info("[Applovin] downJsonData end, taskId:{}, appId:{}, apiKey:{}, day:{}, cost:{}", taskId, appId, apiKey, day, System.currentTimeMillis() - start);
-        return json_data;
+        return jsonData;
     }
 
     private String jsonDataImportDatabase(String jsonData, String day, String appId, String apiKey) {
-        String sql_delete = "DELETE FROM report_applovin WHERE day=? AND sdkKey=?";
         try {
-            jdbcTemplate.update(sql_delete, day, appId);
+            String deleteSql = "DELETE FROM report_applovin WHERE day=? AND sdkKey=?";
+            jdbcTemplate.update(deleteSql, day, appId);
         } catch (Exception e) {
             return String.format("delete report_applovin error,msg:%s", e.getMessage());
         }
         LOG.info("[Applovin] jsonDataImportDatabase start, appId:{}, apiKey:{}, day:{}", appId, apiKey, day);
         long start = System.currentTimeMillis();
         String error = "";
-        String sql_insert = "INSERT INTO report_applovin (day,hour,country,platform,application,package_name,placement," +
+        String insertSql = "INSERT INTO report_applovin (day,hour,country,platform,application,package_name,placement," +
                 "ad_type,device_type,application_is_hidden,zone,zone_id,size,impressions,clicks,ctr,revenue,ecpm,sdkKey)  " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try {
@@ -163,14 +162,14 @@ public class DownloadApplovin extends AdnBaseService {
                         obj.get("ctr") == null ? 0 : obj.get("ctr"), obj.get("revenue") == null ? 0 : obj.get("revenue"),
                         obj.get("ecpm") == null ? 0 : obj.get("ecpm"), appId};
                 if (count > 1000) {
-                    jdbcTemplate.batchUpdate(sql_insert, lsParm);
+                    jdbcTemplate.batchUpdate(insertSql, lsParm);
                     count = 1;
                     lsParm = new ArrayList<>();
                 }
                 lsParm.add(params);
             }
             if (!lsParm.isEmpty()) {
-                jdbcTemplate.batchUpdate(sql_insert, lsParm);
+                jdbcTemplate.batchUpdate(insertSql, lsParm);
             }
         } catch (Exception e) {
             error = String.format("insert report_applovin error, msg:%s", e.getMessage());
@@ -185,7 +184,8 @@ public class DownloadApplovin extends AdnBaseService {
         String error;
         try {
             String whereSql = String.format("b.adn_app_key='%s'", appId);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.adn_app_key='%s' or b.new_account_key='%s')", appId, appId);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));

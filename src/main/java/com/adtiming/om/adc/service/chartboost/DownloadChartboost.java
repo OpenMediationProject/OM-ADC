@@ -82,7 +82,9 @@ public class DownloadChartboost extends AdnBaseService {
         /*String instanceSql = "select placement_key from om_instance where LENGTH(placement_key)>0 " +
                 "and pub_app_id in (select pub_app_id from om_adnetwork_app where api_key=?)  and adn_id=12";*/
         String whereSql = String.format("b.api_key='%s'", userId);
-        List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+        String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s'", userId, userId);
+        List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+
         Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
         List<Map<String, Object>> oldInstance = getOldInstanceList(insIds);
         if (!oldInstance.isEmpty()) {
@@ -124,7 +126,7 @@ public class DownloadChartboost extends AdnBaseService {
     }
 
     private String downJsonData(String userId, String userSignature, String startDate, String endDate, String adLocation, StringBuilder err) {
-        String json_data = "";
+        String jsonData = "";
         HttpEntity entity = null;
         int count = 1;
         String url;
@@ -133,7 +135,7 @@ public class DownloadChartboost extends AdnBaseService {
                     "&userId=" + userId + "&userSignature=" + userSignature + "&adLocation=" + URLEncoder.encode(adLocation, "utf-8");
         } catch (UnsupportedEncodingException e) {
             err.append("build url error");
-            return json_data;
+            return jsonData;
         }
         LOG.info("[Chartboost] request start, reqUrl:{}", url);
         long start = System.currentTimeMillis();
@@ -145,27 +147,28 @@ public class DownloadChartboost extends AdnBaseService {
             try {
 
                 HttpGet httpGet = new HttpGet(url);
-                RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();//设置请求和传输超时时间
+                RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();
                 httpGet.setConfig(requestConfig);
-                //发送Post,并返回一个HttpResponse对象
                 HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
                 StatusLine sl = response.getStatusLine();
+                entity = response.getEntity();
                 if (sl.getStatusCode() != 200) {//如果状态码为200,就是正常返回
                     if (count < 5) {
                         continue;
                     }
-                    err.append(String.format("request report response statusCode:%d,url:%s", sl.getStatusCode(), url));
-                    return json_data;
+                    err.append(String.format("request report response statusCode:%d,msg:%s,url:%s",
+                            sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity), url));
+                    return jsonData;
                 }
-                entity = response.getEntity();
+
                 if (entity == null) {
                     if (count < 5) {
                         continue;
                     }
                     err.append(String.format("response entity is null,url:%s", url));
-                    return json_data;
+                    return jsonData;
                 }
-                json_data = EntityUtils.toString(entity);
+                jsonData = EntityUtils.toString(entity);
                 break;
             } catch (Exception e) {
                 if (count == 5) {
@@ -178,7 +181,7 @@ public class DownloadChartboost extends AdnBaseService {
             }
         }
         LOG.info("[Chartboost] request end, runCount:{}, reqUrl:{}, cost:{}", count, url, System.currentTimeMillis() - start);
-        return json_data;
+        return jsonData;
     }
 
     private String jsonDataImportDatabase(String jsonData, String day, String userId, String placementKey) {
@@ -233,13 +236,14 @@ public class DownloadChartboost extends AdnBaseService {
         return error;
     }
 
-    private String savePrepareReportData(ReportTask task, String reportDay, String appKey) {
+    private String savePrepareReportData(ReportTask task, String reportDay, String userId) {
         String error = "";
         LOG.info("[Chartboost] savePrepareReportData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         try {
-            String whereSql = String.format("b.api_key='%s'", appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String whereSql = String.format("b.api_key='%s'", userId);
+            String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s'", userId, userId);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
@@ -254,11 +258,11 @@ public class DownloadChartboost extends AdnBaseService {
                     "sum(impressions) AS api_impr,sum(clicks) AS api_click,sum(revenue) AS revenue" +
                     " from report_chartboost where day=? and app_key=? group by day,country,campaign_name ";
 
-            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, appKey);
+            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, userId);
 
             if (oriDataList.isEmpty())
                 return "data is null";
-            error = toAdnetworkLinked(task, appKey, placements, oriDataList);
+            error = toAdnetworkLinked(task, userId, placements, oriDataList);
         } catch (Exception e) {
             error = String.format("savePrepareReportData error:%s", e.getMessage());
         }
