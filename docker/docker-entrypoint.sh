@@ -86,7 +86,7 @@ do
         fi
         if [[ ${item_name} = "httpproxy" ]];then
             loginfo_note "[Configuring] ${item_name} in ${CONFFILE}/application-loc.yml"
-            sed -i "s/^http.proxy:.*/http.proxy: ${!env_var}" ${CONFFILE}/application-loc.yml
+            sed -i "s@^http.proxy:.*@http.proxy: ${!env_var}@g" ${CONFFILE}/application-loc.yml
             continue
         fi
         updateymlConfig "$item_name" "${!env_var}" "${CONFFILE}/application-loc.yml"
