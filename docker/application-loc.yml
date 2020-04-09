@@ -6,9 +6,9 @@ logging:
 
 http.proxy: 
 auth:
-  dir: auth
+  dir: /data/om-adc/auth
   domain: 127.0.0.1/api
-download.dir: download
+download.dir: /data/om-adc/download
 
 spring:
   ## datasource
