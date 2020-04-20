@@ -81,12 +81,12 @@ do
         fi
         if [[ ${item_name} = "dsserverdomain" ]];then
             loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "/domain/s/127.0.0.1/${!env_var}/g" ${CONFILE}/application-loc.yml
+            sed -i "/domain/s@domain:.*@domain: ${!env_var}@g" ${CONFILE}/application-loc.yml
             continue
         fi
         if [[ ${item_name} = "httpproxy" ]];then
             loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "s/^http.proxy:.*/http.proxy: ${!env_var}" ${CONFILE}/application-loc.yml
+            sed -i "s@^http.proxy:.*@http.proxy: ${!env_var}@g" ${CONFILE}/application-loc.yml
             continue
         fi
         updateymlConfig "$item_name" "${!env_var}" "${CONFILE}/application-loc.yml"
@@ -99,7 +99,7 @@ do
 	    JAVA_OPTS="$(sed -n 's/JAVA_OPTS="\(.*\)"/\1/p' ${CONFFILE}/${CONFFILE}.conf) ${!env_var}"
             sed -i "s/JAVA_OPTS=.*/JAVA_OPTS=\"${JAVA_OPTS}\"/g" ${CONFILE}/${CONFILE}.conf
             continue
-        fi 
+        fi
         if [[ ${item_name} = "RUN_ARGS" ]]; then
             loginfo_note "[Configuring] ${item_name} in ${CONFILE}/${CONFILE}.conf"
             RUN_ARGS="${!env_var}"
