@@ -24,7 +24,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -95,7 +94,7 @@ public class DownloadTikTok extends AdnBaseService {
     }
 
     private String downJsonData(int taskId, String userId, String userSign, String day, StringBuilder err) {
-        String json_data = "";
+        String jsonData = "";
         HttpEntity entity = null;
         LOG.info("[TikTok] downJsonData start, taskId:{}, userId:{}, userSign:{}, day:{}", taskId, userId, userSign, day);
         long start = System.currentTimeMillis();
@@ -108,29 +107,27 @@ public class DownloadTikTok extends AdnBaseService {
             LOG.info("[TikTok] request url:{}", url);
             updateReqUrl(jdbcTemplate, taskId, url);
             HttpGet httpGet = new HttpGet(url);
-            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();//设置请求和传输超时时间
+            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();
             httpGet.setConfig(requestConfig);
-            //发送Post,并返回一个HttpResponse对象
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             StatusLine sl = response.getStatusLine();
-            LOG.info("toutiao:" + LocalDateTime.now().toLocalTime());
-            if (sl.getStatusCode() != 200) {//如果状态码为200,就是正常返回
-                err.append(String.format("request report response statusCode:%d", sl.getStatusCode()));
-                return json_data;
-            }
             entity = response.getEntity();
+            if (sl.getStatusCode() != 200) {
+                err.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
+                return jsonData;
+            }
             if (entity == null) {
                 err.append("request report response enity is null");
-                return json_data;
+                return jsonData;
             }
-            json_data = EntityUtils.toString(entity);
+            jsonData = EntityUtils.toString(entity);
         } catch (Exception ex) {
             err.append(String.format("downJsonData error,msg:%s", ex.getMessage()));
         } finally {
             EntityUtils.consumeQuietly(entity);
         }
         LOG.info("[TikTok] downJsonData end, taskId:{}, userId:{}, userSign:{}, day:{}, cost:{}", taskId, userId, userSign, day, System.currentTimeMillis() - start);
-        return json_data;
+        return jsonData;
     }
 
     private String tikTokSign(String secure_key, Integer nonce, long currentTime) {
@@ -195,7 +192,8 @@ public class DownloadTikTok extends AdnBaseService {
         String error;
         try {
             String whereSql = String.format("b.client_secret='%s'", secureKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.client_secret='%s' or b.new_account_key='%s')", secureKey, secureKey);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

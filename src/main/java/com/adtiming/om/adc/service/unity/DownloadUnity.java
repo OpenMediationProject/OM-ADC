@@ -111,26 +111,24 @@ public class DownloadUnity extends AdnBaseService {
     }
 
     private String DownCsvFile(String url, String day, String hour, String appKey, StringBuilder sb) {
-        String file_path = "";
+        String filePath = "";
         HttpEntity entity = null;
         try {
             HttpGet httpGet = new HttpGet(url);
             LOG.info("[Unity] request url:{}, day:{}, hour:{}, appKey:{}", url, day, hour, appKey);
             httpGet.setConfig(RequestConfig.custom().setCookieSpec(CookieSpecs.IGNORE_COOKIES).setProxy(cfg.httpProxy).build());
-            //发送Post,并返回一个HttpResponse对象
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             entity = response.getEntity();
             StatusLine sl = response.getStatusLine();
-            if (sl.getStatusCode() != 200) {//如果状态码为200,就是正常返回
-                LOG.info("[Unity] response status code is not 200,statusCode:{},appKey:{},day:{},hour:{}",
-                        sl.getStatusCode(), appKey, day, hour);
-                sb.append(String.format("response status code is not 200,statusCode:%d", sl.getStatusCode()));
-                return file_path;
+            entity = response.getEntity();
+            if (sl.getStatusCode() != 200) {
+                sb.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
+                return filePath;
             }
             if (entity == null) {
                 LOG.info("[Unity] response data is null,appKey:{},day:{},hour:{}", appKey, day, hour);
                 sb.append("response data is null");
-                return file_path;
+                return filePath;
             }
             if (entity.isStreaming()) {
                 try (InputStream instream = entity.getContent()) {
@@ -141,15 +139,15 @@ public class DownloadUnity extends AdnBaseService {
                         FileUtils.forceMkdir(dst_dir);
                         FileUtils.copyInputStreamToFile(instream, dst);
                         instream.close();
-                        file_path = downloadDir + path;
+                        filePath = downloadDir + path;
                     }
                 } catch (Exception e) {
                     sb.append(String.format("Download csv error,error:%s", e.getMessage()));
                     LOG.info("[Unity] Download csv error,appKey:{},day:{},hour:{}", appKey, day, hour, e);
-                    return file_path;
+                    return filePath;
                 }
                 LOG.info("[Unity] Download csv finished,appKey:{},day:{},hour:{}", appKey, day, hour);
-                return file_path;
+                return filePath;
             } else {
                 sb.append("response entity is not a stream");
             }
@@ -160,14 +158,9 @@ public class DownloadUnity extends AdnBaseService {
         } finally {
             EntityUtils.consumeQuietly(entity);
         }
-        return file_path;
+        return filePath;
     }
 
-    /**
-     * 读取CSV文件
-     *
-     * @param csvFilePath 文件路径
-     */
     private String ReadCsvFile(String csvFilePath, String day, String hour, String appKey) {
         String fileEncoder = "UTF-8";//读取文件编码方式，主要是为了解决中文乱码问题。
         //BufferedReader in = null;
@@ -177,22 +170,21 @@ public class DownloadUnity extends AdnBaseService {
         try {
             jdbcTemplate.update(sql_delete, day, hour, appKey);
         } catch (Exception e) {
-            //log.error("[Unity] delete report_unity error", e);
             return String.format("delete report_unity error,%s", e.getMessage());
         }
 
         String error = "";
         int count = 0;
         try (BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(csvFilePath), fileEncoder))) {
-            String sql_insert = "INSERT INTO report_unity (day,source_game_id,source_game_name,source_zone,country," +
+            String insertSql = "INSERT INTO report_unity (day,source_game_id,source_game_name,source_zone,country," +
                     "country_tier,adrequests,available,offers,started,views,revenue,hour,app_key)  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             String rec;
-            boolean have_data = false;
+            boolean haveData = false;
             List<Object[]> lsParm = new ArrayList<>(1000);
             while ((rec = in.readLine()) != null) {
                 count++;
                 if (count > 1) {
-                    have_data = true;
+                    haveData = true;
                     Object[] arr = rec.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)", -1);//双引号内的逗号不分割 双引号外的逗号进行分割
                     Object[] params = new Object[arr.length + 2];
                     for (int i = 0; i < arr.length; i++) {
@@ -219,12 +211,12 @@ public class DownloadUnity extends AdnBaseService {
                     }
                     lsParm.add(params);
                     if (lsParm.size() == 1000) {
-                        jdbcTemplate.batchUpdate(sql_insert, lsParm);
+                        jdbcTemplate.batchUpdate(insertSql, lsParm);
                         lsParm.clear();
                     }
                 }
             }
-            if (!have_data) { //没有拉取到数据
+            if (!haveData) {
                 LocalDateTime lastDay = LocalDateTime.parse(day + " " + hour + ":00:00", DateTimeFormat.TIME_FORMAT);
                 java.time.Duration duration = java.time.Duration.between(lastDay, LocalDateTime.now());
                 int hours = (int) duration.toHours();
@@ -234,7 +226,7 @@ public class DownloadUnity extends AdnBaseService {
                 return "data is null";
             }
             if (!lsParm.isEmpty()) {
-                jdbcTemplate.batchUpdate(sql_insert, lsParm);
+                jdbcTemplate.batchUpdate(insertSql, lsParm);
             }
         } catch (Exception e) {
             error = String.format("delete report_unity error,%s", e.getMessage());
@@ -249,7 +241,8 @@ public class DownloadUnity extends AdnBaseService {
         String error;
         try {
             String whereSql = String.format("b.api_key='%s'", appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s')", appKey, appKey);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "adn_app_key") + "_" + MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));

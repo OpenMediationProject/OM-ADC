@@ -90,7 +90,7 @@ public class DownloadVungle extends AdnBaseService {
     }
 
     private String downJsonData(int taskId, String apiKey, String day, StringBuilder err) {
-        String json_data = "";
+        String jsonData = "";
         HttpEntity entity = null;
         try {
             LOG.info("[Vungle] downJsonData start, taskId:{}, apiKey:{}, day:{}", taskId, apiKey, day);
@@ -104,34 +104,30 @@ public class DownloadVungle extends AdnBaseService {
             httpGet.setHeader("Authorization", "Bearer" + apiKey + "");
             httpGet.setHeader("Vungle-Version", "1");
             httpGet.setHeader("Accept", "application/json");
-            //发送Post,并返回一个HttpResponse对象
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             StatusLine sl = response.getStatusLine();
+            entity = response.getEntity();
             if (sl.getStatusCode() != 200) {//如果状态码为200,就是正常返回
-                //log.error("[Vungle] request report response statusCode is not 200, statusCode:{}, apiKey:{}, day:{}", sl.getStatusCode(), apiKey, day);
-                err.append(String.format("request report response statusCode:%d", sl.getStatusCode()));
-                return json_data;
+                err.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
+                return jsonData;
             }
 
-            entity = response.getEntity();
             if (entity == null) {
-                //log.error("[Vungle] request report response enity is null, apiKey:{}, day:{}", apiKey, day);
                 err.append("request report response enity is null");
-                return json_data;
+                return jsonData;
             }
-            json_data = EntityUtils.toString(entity);
-            if (StringUtils.isBlank(json_data)) {
+            jsonData = EntityUtils.toString(entity);
+            if (StringUtils.isBlank(jsonData)) {
                 err.append("response data is null");
             }
             LOG.info("[Vungle] downJsonData end, taskId:{}, apiKey:{}, day:{}, cost:{}", taskId, apiKey, day, System.currentTimeMillis() - start);
-            return json_data;
+            return jsonData;
         } catch (Exception ex) {
-            //log.error("[Vungle] downJsonData error, apiKey:{}, day:{}", apiKey, day);
             err.append(String.format("downJsonData error:%s", ex.getMessage()));
         } finally {
             EntityUtils.consumeQuietly(entity);
         }
-        return json_data;
+        return jsonData;
     }
 
     private String jsonDataImportDatabase(String jsonData, String day, String apiKey) {
@@ -140,7 +136,6 @@ public class DownloadVungle extends AdnBaseService {
         try {
             jdbcTemplate.update(sql_delete, day, apiKey);
         } catch (Exception e) {
-            //log.error("[Vungle] delete report_vungle error, apiKey:{}, day:{}", apiKey, day, e);
             return String.format("delete report_vungle error:%s", e.getMessage());
         }
 
@@ -185,7 +180,8 @@ public class DownloadVungle extends AdnBaseService {
         long start = System.currentTimeMillis();
         try {
             String whereSql = String.format("b.report_app_id='%s'", appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.report_app_id='%s' or b.new_account_key='%s')", appKey, appKey);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

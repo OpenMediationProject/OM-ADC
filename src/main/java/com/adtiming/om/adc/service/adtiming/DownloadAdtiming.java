@@ -109,16 +109,15 @@ public class DownloadAdtiming extends AdnBaseService {
             updateReqUrl(jdbcTemplate, taskId, url);
             LOG.info("Adtiming:" + LocalDateTime.now().toLocalTime());
             HttpGet httpGet = new HttpGet(url);
-            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();//设置请求和传输超时时间
+            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();
             httpGet.setConfig(requestConfig);
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             StatusLine sl = response.getStatusLine();
+            entity = response.getEntity();
             if (sl.getStatusCode() != 200) {
-                err.append(String.format("request report response statusCode:%d", sl.getStatusCode()));
+                err.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
                 return json_data;
             }
-
-            entity = response.getEntity();
             if (entity == null) {
                 err.append("request report response enity is null");
                 return json_data;
@@ -134,16 +133,16 @@ public class DownloadAdtiming extends AdnBaseService {
     }
 
     private String jsonDataImportDatabase(String jsonData, String day, String pubToken) {
-        String deleteSql = "DELETE FROM report_Adtiming WHERE day=? AND pub_token=?";
+        String deleteSql = "DELETE FROM report_adtiming WHERE day=? AND pub_token=?";
         try {
             jdbcTemplate.update(deleteSql, day, pubToken);
         } catch (Exception e) {
-            return String.format("delete report_Adtiming error,msg:%s", e.getMessage());
+            return String.format("delete report_adtiming error,msg:%s", e.getMessage());
         }
         LOG.info("[Adtiming] jsonDataImportDatabase start,pubToken:{}, day:{}", pubToken, day);
         long start = System.currentTimeMillis();
         String error = "";
-        String sql_insert = "INSERT INTO report_Adtiming (day,hour,country,app_id,app_name,placement_id,placement_name," +
+        String sql_insert = "INSERT INTO report_adtiming (day,hour,country,app_id,app_name,placement_id,placement_name," +
                 "impression,click,earning,ecpm,pub_token) " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)";
         int count = 0;
@@ -174,7 +173,7 @@ public class DownloadAdtiming extends AdnBaseService {
                 jdbcTemplate.batchUpdate(sql_insert, lsParm);
             }
         } catch (Exception e) {
-            error = String.format("insert report_Adtiming error, msg:%s", e.getMessage());
+            error = String.format("insert report_adtiming error, msg:%s", e.getMessage());
         }
         LOG.info("[Adtiming] jsonDataImportDatabase end, pubToken:{}, day:{}, count:{}, cost:{}", pubToken, day,
                 count,System.currentTimeMillis() - start);
@@ -187,7 +186,8 @@ public class DownloadAdtiming extends AdnBaseService {
         String error;
         try {
             String whereSql = String.format("b.refresh_token='%s'", task.adnAppToken);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.refresh_token='%s' or b.new_account_key='%s')", task.adnAppToken, task.adnAppToken);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
@@ -202,7 +202,7 @@ public class DownloadAdtiming extends AdnBaseService {
 
             String dataSql = "SELECT day,hour,country,placement_id data_key," +
                     "sum(impression) AS api_impr,sum(click) AS api_click,sum(earning) AS revenue" +
-                    " FROM report_Adtiming WHERE day=? AND pub_token=? " +
+                    " FROM report_adtiming WHERE day=? AND pub_token=? " +
                     " GROUP BY day,hour,country,placement_id";
 
             List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, task.day, task.adnAppToken);

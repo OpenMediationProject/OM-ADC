@@ -10,6 +10,7 @@ import com.adtiming.om.adc.service.adtiming.RequestAdtiming;
 import com.adtiming.om.adc.service.applovin.RequestApplovin;
 import com.adtiming.om.adc.service.chartboost.RequestChartboost;
 import com.adtiming.om.adc.service.facebook.RequestFacebook;
+import com.adtiming.om.adc.service.ironsource.RequestIronSource;
 import com.adtiming.om.adc.service.mintegral.RequestMintegral;
 import com.adtiming.om.adc.service.mopub.RequestMopub;
 import com.adtiming.om.adc.service.tapjoy.RquestTapjoy;
@@ -59,6 +60,9 @@ public class APIController extends BaseController {
 
     @Resource
     private RequestMintegral mintegral;
+
+    @Resource
+    private RequestIronSource ironSource;
 
     @RequestMapping("/test")
     public Object test() {
@@ -193,6 +197,16 @@ public class APIController extends BaseController {
             mintegral.rebuild(day, id);
         } else {
             mintegral.rebuild(day);
+        }
+        return Response.build();
+    }
+
+    @RequestMapping("/ironsource/rebuild")
+    public Object rebuildIronSourcce(String[] day, Integer id) {
+        if (id != null) {
+            ironSource.rebuild(day, id);
+        } else {
+            ironSource.rebuild(day);
         }
         return Response.build();
     }

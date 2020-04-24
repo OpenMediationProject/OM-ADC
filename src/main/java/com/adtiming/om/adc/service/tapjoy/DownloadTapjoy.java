@@ -26,7 +26,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -128,13 +127,13 @@ public class DownloadTapjoy extends AdnBaseService {
     }
 
     private String downJsonData(int taskId, String authKey, String day, StringBuilder err) {
-        String json_data = "";
+        String jsonData = "";
         HttpEntity entity = null;
         String reportUrl = baseUrl + "v2/publisher/reports?date=" + day + "&page_size=100&mock=0&group_by=placements";
         String token = getToken(authKey, day, err);
         if (StringUtils.isBlank(token)) {
             LOG.error("[Tapjoy] getToken failed, taskId:{}, authKey:{}, day:{}", taskId, authKey, day);
-            return json_data;
+            return jsonData;
         }
         try {
             updateReqUrl(jdbcTemplate, taskId, reportUrl);
@@ -143,24 +142,22 @@ public class DownloadTapjoy extends AdnBaseService {
             HttpGet httpGet = new HttpGet(reportUrl);
             httpGet.setHeader("Authorization", "Bearer " + token);
             httpGet.setHeader("Accept", "application/json; */*");
-            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();//设置请求和传输超时时间
+            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();
             httpGet.setConfig(requestConfig);
-            //发送Post,并返回一个HttpResponse对象
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             StatusLine sl = response.getStatusLine();
-            LOG.info("Tapjoy:" + LocalDateTime.now().toLocalTime());
-            if (sl.getStatusCode() != 200) {//如果状态码为200,就是正常返回
-                err.append(String.format("request report response statusCode:%d", sl.getStatusCode()));
-                return json_data;
-            }
             entity = response.getEntity();
+            if (sl.getStatusCode() != 200) {
+                err.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
+                return jsonData;
+            }
             if (entity == null) {
                 err.append("request report response enity is null");
-                return json_data;
+                return jsonData;
             }
-            json_data = EntityUtils.toString(entity);
+            jsonData = EntityUtils.toString(entity);
             LOG.info("[Tapjoy] downJsonData end, authKey:{}, day:{}, cost:{}", authKey, day, System.currentTimeMillis() - start);
-            return json_data;
+            return jsonData;
         } catch (Exception ex) {
             //log.error("[Tapjoy] downJsonData error, authKey:{}, day:{}", authKey, day);
             err.append(String.format("downJsonData error:%s", ex.getMessage()));
@@ -227,7 +224,8 @@ public class DownloadTapjoy extends AdnBaseService {
         long start = System.currentTimeMillis();
         try {
             String whereSql = String.format("b.api_key='%s'", appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s')", appKey, appKey);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

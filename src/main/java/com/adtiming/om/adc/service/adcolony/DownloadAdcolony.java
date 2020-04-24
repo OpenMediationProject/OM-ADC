@@ -109,15 +109,14 @@ public class DownloadAdcolony extends AdnBaseService {
             updateReqUrl(jdbcTemplate, taskId, url);
             HttpGet httpGet = new HttpGet(url);
             httpGet.setConfig(RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setCookieSpec(CookieSpecs.IGNORE_COOKIES).setProxy(cfg.httpProxy).build());
-            //发送Post,并返回一个HttpResponse对象
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             StatusLine sl = response.getStatusLine();
-            if (sl.getStatusCode() != 200) {//如果状态码为200,就是正常返回
-                err.append(String.format("request report response statusCode:%d", sl.getStatusCode()));
+            entity = response.getEntity();
+            if (sl.getStatusCode() != 200) {
+                err.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
                 return json_data;
             }
 
-            entity = response.getEntity();
             if (entity == null) {
                 err.append("request report response enity is null");
                 return json_data;
@@ -188,7 +187,8 @@ public class DownloadAdcolony extends AdnBaseService {
         String error;
         try {
             String whereSql = String.format("b.client_secret='%s'", accountToken);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.client_secret='%s' or b.new_account_key='%s')", accountToken, accountToken);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
             // instance's placement_key changed

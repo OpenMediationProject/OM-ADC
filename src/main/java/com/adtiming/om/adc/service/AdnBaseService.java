@@ -116,20 +116,19 @@ public abstract class AdnBaseService {
         finishCallBack(o);
     }
 
-    /**
-     * 改任务状态
-     *
-     * @param id     task_id
-     * @param status 任务状态：0，wait；1，start；2，complete；3，fail；4，invalid
-     */
-    protected void updateTaskStatus(JdbcTemplate jdbcTemplate, int id, int status, String msg) {
+    protected void updateTaskStatus(JdbcTemplate jdbcTemplateW, int id, int status, String msg) {
         String sql;
         if (status == 1) {
-            sql = "UPDATE report_adnetwork_task SET status=?,msg=? WHERE id=?";
-            jdbcTemplate.update(sql, status, msg, id);
+            sql = "UPDATE report_adnetwork_task set status=? WHERE id=?";
+            jdbcTemplateW.update(sql, status, id);
         } else {
-            sql = "UPDATE report_adnetwork_task SET status=?,msg=?,run_count=run_count+1 WHERE id=?";
-            jdbcTemplate.update(sql, status, msg, id);
+            if (StringUtils.isBlank(msg)) {
+                sql = "UPDATE report_adnetwork_task SET status=?,run_count=run_count+1 WHERE id=?";
+                jdbcTemplateW.update(sql, status, id);
+            } else {
+                sql = String.format("UPDATE report_adnetwork_task SET status=?,msg=concat(ifnull(msg,''), '\n', '%s'),run_count=run_count+1 WHERE id=?", msg.replaceAll("'", "''"));
+                jdbcTemplateW.update(sql, status, id);
+            }
         }
     }
 
@@ -148,7 +147,7 @@ public abstract class AdnBaseService {
         executeTask.remove(o.id);
     }
 
-    protected List<Map<String, Object>> getInstanceList(String whereSql) {
+    protected List<Map<String, Object>> getInstanceList(String whereSql, String changedSql) {
         String sql = "SELECT a.id AS instance_id,a.placement_key,a.placement_id,a.pub_app_id,a.adn_id,a.ab_test_mode," +
                 "b.adn_app_key,c.publisher_id,c.ad_type," +
                 "d.plat,d.category,d.app_id," +
@@ -159,6 +158,25 @@ public abstract class AdnBaseService {
                 " LEFT JOIN om_publisher_app d ON a.pub_app_id=d.id" +
                 " LEFT JOIN om_publisher e ON c.publisher_id=e.id" +
                 " WHERE a.adn_id=? AND " + whereSql;
+        List<Map<String, Object>> list = jdbcTemplate.queryForList(sql, adnId);
+        List<Map<String, Object>> oldList = getAccountChangedList(changedSql);
+        if (!oldList.isEmpty()) {
+            list.addAll(oldList);
+        }
+        return list;
+    }
+    private List<Map<String, Object>> getAccountChangedList(String whereSql) {
+        String sql = "SELECT a.id AS instance_id,a.placement_key,a.placement_id,a.pub_app_id,a.adn_id,a.ab_test_mode," +
+                "b.adn_app_key,c.publisher_id,c.ad_type," +
+                "d.plat,d.category,d.app_id," +
+                "IFNULL(e.revenue_sharing,1) AS revenue_sharing" +
+                " FROM om_instance a" +
+                " LEFT JOIN om_adnetwork_app_change b ON a.adn_app_id=b.id" +
+                " LEFT JOIN om_placement c ON a.placement_id=c.id" +
+                " LEFT JOIN om_publisher_app d ON a.pub_app_id=d.id" +
+                " LEFT JOIN om_publisher e ON c.publisher_id=e.id" +
+                " WHERE a.adn_id=? AND b.status=1 " +
+                " AND a.placement_key is not null and a.placement_key !='' AND " + whereSql;
         return jdbcTemplate.queryForList(sql, adnId);
     }
 
@@ -176,7 +194,8 @@ public abstract class AdnBaseService {
                         " left join om_placement c on a.placement_id=c.id" +
                         " left join om_publisher_app d on a.pub_app_id=d.id" +
                         " left join om_publisher e on c.publisher_id=e.id" +
-                        " where a.adn_id=? and a.id in (%s)",
+                        " where a.adn_id=? AND a.placement_key is not null and a.placement_key !='' " +
+                        " and a.id in (%s)",
                 StringUtils.join(insIds, ","));
         return jdbcTemplate.queryForList(sql, adnId);
     }
