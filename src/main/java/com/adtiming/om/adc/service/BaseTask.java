@@ -132,6 +132,10 @@ public class BaseTask {
                 map.put("adn_api_key", rs.getString("adn_api_key"));
                 map.put("user_signature", rs.getString("user_signature"));
                 break;
+            case 15://IronSource
+                map.put("user_id", rs.getString("user_id"));
+                map.put("user_signature", rs.getString("user_signature"));
+                break;
         }
         return map;
     }
