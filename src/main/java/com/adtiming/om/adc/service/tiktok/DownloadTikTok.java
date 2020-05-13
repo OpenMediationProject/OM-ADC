@@ -205,7 +205,7 @@ public class DownloadTikTok extends AdnBaseService {
             }
 
             String dataSql = "select day,region country,platform,ad_slot_id data_key," +
-                    "sum(impressions) api_key,sum(click) api_click,sum(cost) AS revenue " +
+                    "sum(impressions) api_impr,sum(click) api_click,sum(cost) AS revenue " +
                     "  from report_tiktok where day=? and secure_key=? group by day,region,ad_slot_id ";
 
             List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, secureKey);
