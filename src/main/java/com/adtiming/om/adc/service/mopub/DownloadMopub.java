@@ -97,7 +97,7 @@ public class DownloadMopub extends AdnBaseService {
     }
 
     private String downCsvFile(int taskId, String appKey, String apiKey, String day, StringBuilder err) {
-        String file_path = "";
+        String filePath = "";
         HttpEntity entity = null;
         LOG.info("[Mopub] downCsvFile start, taskId:{}, appKey:{}, apiKey:{}, day:{}", taskId, appKey, apiKey, day);
         long start = System.currentTimeMillis();
@@ -111,14 +111,15 @@ public class DownloadMopub extends AdnBaseService {
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
             entity = response.getEntity();
             StatusLine sl = response.getStatusLine();
-            if (sl.getStatusCode() != 200) {//statusCode is 200 is successful
-                err.append(String.format("request report response statusCode:%d", sl.getStatusCode()));
-                return file_path;
+            entity = response.getEntity();
+            if (sl.getStatusCode() != 200) {
+                err.append(String.format("request report response statusCode:%d,msg:%s", sl.getStatusCode(), entity == null ? "" : EntityUtils.toString(entity)));
+                return filePath;
             }
 
             if (entity == null) {
                 err.append("request report response enity is null");
-                return file_path;
+                return filePath;
             }
             if (entity.isStreaming()) {
                 try (InputStream instream = entity.getContent()) {
@@ -129,7 +130,7 @@ public class DownloadMopub extends AdnBaseService {
                         FileUtils.forceMkdir(dst_dir);
                         FileUtils.copyInputStreamToFile(instream, dst);
                         instream.close();
-                        file_path = downloadDir + path;
+                        filePath = downloadDir + path;
                     }
                 } catch (Exception e) {
                     err.append(String.format("download csv error,msg:%s", e.getMessage()));
@@ -141,7 +142,7 @@ public class DownloadMopub extends AdnBaseService {
             EntityUtils.consumeQuietly(entity);
         }
         LOG.info("[Mopub] downCsvFile end, taskId:{}, appKey:{}, apiKey:{}, day:{}, cost:{}", taskId, appKey, apiKey, day, System.currentTimeMillis() - start);
-        return file_path;
+        return filePath;
     }
 
     private String readCsvFile(String csvFilePath, String day, String appKey, String apiKey) {
@@ -209,7 +210,8 @@ public class DownloadMopub extends AdnBaseService {
         String error;
         try {
             String whereSql = String.format("b.adn_app_key='%s'", appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.adn_app_key='%s' or b.new_account_key='%s')", appKey, appKey);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

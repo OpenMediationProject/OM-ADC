@@ -36,7 +36,8 @@ public class DownloadFacebook extends AdnBaseService {
     private static final String url = "https://graph.facebook.com/v2.10/%s/adnetworkanalytics_results?" +
             "query_ids=['%s']&access_token=%s";
 
-    private static final String columns = "['fb_ad_network_revenue','fb_ad_network_request','fb_ad_network_cpm','fb_ad_network_click','fb_ad_network_imp','fb_ad_network_filled_request','fb_ad_network_fill_rate','fb_ad_network_ctr','fb_ad_network_show_rate','fb_ad_network_video_guarantee_revenue','fb_ad_network_video_view','fb_ad_network_video_view_rate','fb_ad_network_video_mrc','fb_ad_network_video_mrc_rate','fb_ad_network_bidding_request','fb_ad_network_bidding_response']";
+    //private static final String columns = "['fb_ad_network_revenue','fb_ad_network_request','fb_ad_network_cpm','fb_ad_network_click','fb_ad_network_imp','fb_ad_network_filled_request','fb_ad_network_fill_rate','fb_ad_network_ctr','fb_ad_network_show_rate','fb_ad_network_video_guarantee_revenue','fb_ad_network_video_view','fb_ad_network_video_view_rate','fb_ad_network_video_mrc','fb_ad_network_video_mrc_rate','fb_ad_network_bidding_request','fb_ad_network_bidding_response']";
+    private static final String columns = "['fb_ad_network_revenue','fb_ad_network_cpm','fb_ad_network_request','fb_ad_network_click','fb_ad_network_imp','fb_ad_network_filled_request','fb_ad_network_video_guarantee_revenue','fb_ad_network_video_view','fb_ad_network_video_mrc','fb_ad_network_bidding_request','fb_ad_network_bidding_response']";
     private static final String breakdowns = "['country','app','placement','platform']";
     private static final String getQueryIdUrl = "https://graph.facebook.com/v2.11/%s/adnetworkanalytics/?since=%s&until=%s&aggregation_period=day&metrics=%s&breakdowns=%s&access_token=%s";
 
@@ -173,7 +174,7 @@ public class DownloadFacebook extends AdnBaseService {
                         }
                         reqCount++;
                         try {
-                            Thread.sleep(1000 * 30);//间隔10秒获取一次,等待60秒
+                            Thread.sleep(1000 * 60);//间隔10秒获取一次,等待60秒
                         } catch (InterruptedException ignored) {
                         }
                     }
@@ -323,7 +324,8 @@ public class DownloadFacebook extends AdnBaseService {
         String error;
         try {
             String whereSql = String.format("b.adn_app_key='%s'", appId);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String changeSql = String.format("(b.adn_app_key='%s' or b.new_account_key='%s')", appId, appId);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

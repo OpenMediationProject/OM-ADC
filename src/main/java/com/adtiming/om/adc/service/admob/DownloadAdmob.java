@@ -194,9 +194,10 @@ public class DownloadAdmob extends AdnBaseService {
         long start = System.currentTimeMillis();
         String error;
         try {
-            pubId = "ca-app-" + pubId;
-            String whereSql = "a.placement_key like '" + pubId + "%'";
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql);
+            String pubFormatId = "ca-app-" + pubId;
+            String whereSql = String.format("b.report_app_id='%s'", pubId);
+            String changeSql = String.format("(b.report_app_id='%s' or b.new_account_key='%s')", pubId, pubId);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue));
 
@@ -218,10 +219,10 @@ public class DownloadAdmob extends AdnBaseService {
                     " FROM report_admob where day=? and ad_client_id=?" +
                     " group by day,country,ad_unit_id";
 
-            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, pubId);
+            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, pubFormatId);
             if (oriDataList.isEmpty())
                 return "data is null";
-            error = toAdnetworkLinked(task, pubId, placements, oriDataList);
+            error = toAdnetworkLinked(task, pubFormatId, placements, oriDataList);
         } catch (Exception e) {
             error = String.format("savePrepareReportData error, msg:%s", e.getMessage());
         }
