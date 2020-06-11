@@ -8,6 +8,9 @@ import com.adtiming.om.adc.dto.ReportTask;
 import com.adtiming.om.adc.service.AdnBaseService;
 import com.adtiming.om.adc.service.AppConfig;
 import com.adtiming.om.adc.util.MapHelper;
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.adsense.AdSense;
 import com.google.api.services.adsense.model.AdsenseReportsGenerateResponse;
 import org.apache.commons.lang3.StringUtils;
@@ -58,14 +61,22 @@ public class DownloadAdmob extends AdnBaseService {
         String error;
         try {
             updateTaskStatus(jdbcTemplate, task.id, 1, "");
-            AuthAdmob auth = new AuthAdmob(cfg.proxy, cfg.authDir, task.adnApiKey, task.adnAppToken, task.credentialPath, cfg.authDomain);
-            AdsenseReportsGenerateResponse res = download(auth.getAdSense(), task.userId, task.day, err);
+            AdsenseReportsGenerateResponse res;
+            if (task.authType == 0) {//0:开发者账号授权拉取
+                AuthAdmob auth = new AuthAdmob(cfg.proxy, cfg.authDir, task.adnApiKey, task.adnAppToken, task.credentialPath, cfg.authDomain);
+                res = download(auth.getAdSense(), task.userId, task.day, err);
+            } else if (task.authType == 1){//1:adt账号联合登录授权方式
+                res = downloadWithOwnAccount(task, err);
+            } else {//2:无需授权，开发者自有账号拉取
+                res = downloadWithDevAccount(task, err);
+            }
             if (res != null && !res.isEmpty() && err.length() == 0) {
                 error = saveResponseData(res, task.userId);
                 if (StringUtils.isBlank(error)) {
-                    error = savePrepareReportData(task, task.day, task.userId);
+                    String accountKey = "ca-app-" + task.userId;
+                    error = savePrepareReportData(task, accountKey);
                     if (StringUtils.isBlank(error)) {
-                        String accountKey = "ca-app-" + task.userId;
+
                         error = reportLinkedToStat(task, accountKey);
                     }
                 }
@@ -74,6 +85,7 @@ public class DownloadAdmob extends AdnBaseService {
             }
             int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
             if (task.runCount > 5 && status != 2) {
+                updateAccountException(jdbcTemplate, task.reportAccountId, error);
                 LOG.error("[Admob] executeTask error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
             }
             updateTaskStatus(jdbcTemplate, task.id, status, error);
@@ -81,7 +93,7 @@ public class DownloadAdmob extends AdnBaseService {
             LOG.info("[Admob] executeTask end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
         } catch (Exception e) {
             updateTaskStatus(jdbcTemplate, task.id, 3, e.getMessage());
-            LOG.error("[Admob] excuteTask error,taskId:{}", task.id, e);
+            LOG.error("[Admob] excuteTask error,taskId:{}",  task.id, e);
         }
     }
 
@@ -122,17 +134,100 @@ public class DownloadAdmob extends AdnBaseService {
         return response;
     }
 
-    private String saveResponseData(AdsenseReportsGenerateResponse response, String pubId) {
+    private AdsenseReportsGenerateResponse downloadWithDevAccount(ReportTask task, StringBuilder err) throws Exception {
+        LOG.info("[Admob] download start, taskId:{}", task.id);
+        long start = System.currentTimeMillis();
+        NetHttpTransport transport = new NetHttpTransport.Builder().setProxy(cfg.proxy).build();
+        GoogleCredential credential = new GoogleCredential.Builder()
+                .setJsonFactory(JacksonFactory.getDefaultInstance())
+                .setTransport(transport)
+                .setClientSecrets(task.adnApiKey, task.userSignature)
+                .build()
+                .setRefreshToken(task.adnAppToken);
+        //.setFromTokenResponse(tokenResponse);
+
+        AdSense adsense = new AdSense.Builder(transport,
+                JacksonFactory.getDefaultInstance(), credential)
+                .setApplicationName("google_api")
+                .build();
+        LocalDate date = LocalDate.parse(task.day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
+        String dayDif = count + "d";
+        if (count == 0) {
+            dayDif = "";
+        }
+        String startDate = "today" + dayDif;
+        String endDate = "today" + dayDif;
+        AdSense.Reports.Generate request = adsense.reports().generate(startDate, endDate);
+        request.setUseTimezoneReporting(true);
+        request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
+                "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
+                "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
+                "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
+        request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
+//         Sort by ascending date.
+        request.setSort(Collections.singletonList("+DATE"));
+
+        AdsenseReportsGenerateResponse response = request.execute();
+        if (response == null || response.isEmpty()) {
+            err.append("reponse is null or empty");
+        }
+        LOG.info("[Admob] download end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
+        return response;
+    }
+
+    private AdsenseReportsGenerateResponse downloadWithOwnAccount(ReportTask task, StringBuilder err) throws Exception {
+        LOG.info("[Admob] download start, taskId:{}", task.id);
+        long start = System.currentTimeMillis();
+        NetHttpTransport transport = new NetHttpTransport.Builder().setProxy(cfg.proxy).build();
+        GoogleCredential credential = new GoogleCredential.Builder()
+                .setJsonFactory(JacksonFactory.getDefaultInstance())
+                .setTransport(transport)
+                .setClientSecrets(cfg.adtClientId, cfg.adtClientSecret)
+                .build()
+                .setRefreshToken(task.adnAppToken);
+        //.setFromTokenResponse(tokenResponse);
+
+        AdSense adsense = new AdSense.Builder(transport,
+                JacksonFactory.getDefaultInstance(), credential)
+                .setApplicationName("google_api")
+                .build();
+        LocalDate date = LocalDate.parse(task.day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
+        String dayDif = count + "d";
+        if (count == 0) {
+            dayDif = "";
+        }
+        String startDate = "today" + dayDif;
+        String endDate = "today" + dayDif;
+        AdSense.Reports.Generate request = adsense.reports().generate(startDate, endDate);
+        request.setUseTimezoneReporting(true);
+        request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
+                "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
+                "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
+                "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
+        request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
+//         Sort by ascending date.
+        request.setSort(Collections.singletonList("+DATE"));
+
+        AdsenseReportsGenerateResponse response = request.execute();
+        if (response == null || response.isEmpty()) {
+            err.append("reponse is null or empty");
+        }
+        LOG.info("[Admob] download end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
+        return response;
+    }
+
+    private String saveResponseData(AdsenseReportsGenerateResponse response, String accountKey) {
 
         String day = response.getEndDate();
-        pubId = "ca-app-" + pubId;
         String sql_delete = "DELETE FROM report_admob WHERE day=? AND ad_client_id =?";
         try {
-            jdbcTemplate.update(sql_delete, day, pubId);
+            jdbcTemplate.update(sql_delete, day, accountKey);
         } catch (Exception e) {
             return String.format("delete report_admob error,msg:%s", e.getMessage());
         }
-        LOG.info("[Admob] saveResponseData start, accountId:{}, day", pubId, day);
+        LOG.info("[Admob] saveResponseData start, accountId:{}, day", accountKey, day);
         long start = System.currentTimeMillis();
         String error = "";
 
@@ -185,21 +280,19 @@ public class DownloadAdmob extends AdnBaseService {
         } catch (Exception e) {
             error = String.format("insert into report_admob error,msg:%s", e.getMessage());
         }
-        LOG.info("[Admob] saveResponseData end, accountId, day:{}, cost:{}", pubId, day, System.currentTimeMillis() - start);
+        LOG.info("[Admob] saveResponseData end, accountId, day:{}, cost:{}", accountKey, day, System.currentTimeMillis() - start);
         return error;
     }
 
-    public String savePrepareReportData(ReportTask task, String reportDay, String pubId) {
+    public String savePrepareReportData(ReportTask task, String pubId) {
         LOG.info("[Admob] savePrepareReportData start, taskId:{}, day", task.id);
         long start = System.currentTimeMillis();
         String error;
         try {
-            String pubFormatId = "ca-app-" + pubId;
-            String whereSql = String.format("b.report_app_id='%s'", pubId);
-            String changeSql = String.format("(b.report_app_id='%s' or b.new_account_key='%s')", pubId, pubId);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            String reportDay = task.day;
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue));
+            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -213,20 +306,20 @@ public class DownloadAdmob extends AdnBaseService {
 
             String dataSql = "select day,0 hour,country," +
                     "ad_unit_id adn_placement_key,ad_unit_id data_key," +
-                    "sum(ad_requests) as api_requests," +
+                    "sum(ad_requests) as api_request," +
                     "sum(individual_ad_impressions) as api_impr,sum(clicks) AS api_click," +
                     "sum(earnings) AS revenue,sum(matched_ad_requests) AS api_filled " +
                     " FROM report_admob where day=? and ad_client_id=?" +
                     " group by day,country,ad_unit_id";
 
-            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, pubFormatId);
+            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, pubId);
             if (oriDataList.isEmpty())
                 return "data is null";
-            error = toAdnetworkLinked(task, pubFormatId, placements, oriDataList);
+            error = toAdnetworkLinked(task, pubId, placements, oriDataList);
         } catch (Exception e) {
             error = String.format("savePrepareReportData error, msg:%s", e.getMessage());
         }
-        LOG.info("[Admob] savePrepareReportData end, accountId, day:{}, cost:{}", pubId, reportDay, System.currentTimeMillis() - start);
+        LOG.info("[Admob] savePrepareReportData end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
         return error;
     }
 }

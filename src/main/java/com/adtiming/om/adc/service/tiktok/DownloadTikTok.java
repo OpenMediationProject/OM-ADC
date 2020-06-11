@@ -191,9 +191,7 @@ public class DownloadTikTok extends AdnBaseService {
         long start = System.currentTimeMillis();
         String error;
         try {
-            String whereSql = String.format("b.client_secret='%s'", secureKey);
-            String changeSql = String.format("(b.client_secret='%s' or b.new_account_key='%s')", secureKey, secureKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

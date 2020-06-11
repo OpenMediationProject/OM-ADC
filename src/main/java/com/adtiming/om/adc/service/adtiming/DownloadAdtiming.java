@@ -91,6 +91,7 @@ public class DownloadAdtiming extends AdnBaseService {
         }
         int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
         if (task.runCount > 5 && status != 2) {
+            updateAccountException(jdbcTemplate, task.reportAccountId, error);
             LOG.error("[Adtiming] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
         }
         updateTaskStatus(jdbcTemplate, task.id, status, error);
@@ -185,9 +186,7 @@ public class DownloadAdtiming extends AdnBaseService {
         long start = System.currentTimeMillis();
         String error;
         try {
-            String whereSql = String.format("b.refresh_token='%s'", task.adnAppToken);
-            String changeSql = String.format("(b.refresh_token='%s' or b.new_account_key='%s')", task.adnAppToken, task.adnAppToken);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));

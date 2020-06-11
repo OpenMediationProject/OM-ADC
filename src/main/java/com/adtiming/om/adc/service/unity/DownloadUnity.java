@@ -88,7 +88,7 @@ public class DownloadUnity extends AdnBaseService {
             String file_path = DownCsvFile(url, day, hour, appKey, sb);
             String error;
             if (StringUtils.isNotBlank(file_path)) {
-                error = ReadCsvFile(file_path, day, hour, appKey);
+                error = ReadCsvFile(task, file_path, day, hour, appKey);
                 if (StringUtils.isBlank(error)) {
                     error = savePrepareReportData(task, day, task.hour, appKey);
                     if (StringUtils.isBlank(error)) {
@@ -161,14 +161,14 @@ public class DownloadUnity extends AdnBaseService {
         return filePath;
     }
 
-    private String ReadCsvFile(String csvFilePath, String day, String hour, String appKey) {
+    private String ReadCsvFile(ReportTask task, String csvFilePath, String day, String hour, String appKey) {
         String fileEncoder = "UTF-8";//读取文件编码方式，主要是为了解决中文乱码问题。
         //BufferedReader in = null;
-        String sql_delete = "delete from report_unity where day=? and hour=? and app_key=?";
+        String sql_delete = String.format("delete from report_unity where day=? and app_key=? %s", task.timeDimension == 0 ? "and hour=" + hour : "");
         long start = System.currentTimeMillis();
         LOG.info("[Unity] insert report_unity start,appKey:{},day:{},hour:{}", appKey, day, hour);
         try {
-            jdbcTemplate.update(sql_delete, day, hour, appKey);
+            jdbcTemplate.update(sql_delete, day, appKey);
         } catch (Exception e) {
             return String.format("delete report_unity error,%s", e.getMessage());
         }
@@ -240,9 +240,7 @@ public class DownloadUnity extends AdnBaseService {
         long start = System.currentTimeMillis();
         String error;
         try {
-            String whereSql = String.format("b.api_key='%s'", appKey);
-            String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s')", appKey, appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "adn_app_key") + "_" + MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
@@ -257,16 +255,16 @@ public class DownloadUnity extends AdnBaseService {
                         MapHelper.getString(m, "adn_app_key") + "_" + MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
             }
 
-            String dataSql = "select day,hour,country,case when source_zone is null or source_zone = '' then concat(source_game_id,'_',source_game_id) else concat(source_game_id,'_',source_zone) end data_key," +
-                    "sum(adrequests) api_requests,sum(available) api_filled," +
+            String dataSql = String.format("select day,hour,country,case when source_zone is null or source_zone = '' then concat(source_game_id,'_',source_game_id) else concat(source_game_id,'_',source_zone) end data_key," +
+                    "sum(adrequests) api_request,sum(available) api_filled," +
                     "sum(started) api_impr,sum(views) api_click," +
                     "sum(started) api_video_start,sum(views) api_video_complete," +
                     "sum(revenue) revenue " +
                     " from report_unity" +
-                    " where day=? and hour=? and app_key=? " +
-                    " group by hour,day,country,source_game_id,source_game_name,source_zone";
+                    " where day=? and app_key=? %s" +
+                    " group by hour,day,country,source_game_id,source_game_name,source_zone", task.timeDimension == 0 ? "and hour=" + reportHour : "");
 
-            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, reportHour, appKey);
+            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, appKey);
 
             if (oriDataList.isEmpty())
                 return "data is empty";

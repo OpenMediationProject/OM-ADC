@@ -77,13 +77,7 @@ public class DownloadChartboost extends AdnBaseService {
         LOG.info("[Chartboost] download start, userId:{},date:{}, timeZone:{}", userId, date, cal.getTimeZone().toZoneId().getId());
         long start = System.currentTimeMillis();
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
-        //临时去掉部分app数据拉取
-        //and adt_publisher_app_id not in (1370,1614,1702,1759,2240,2267,2292))
-        /*String instanceSql = "select placement_key from om_instance where LENGTH(placement_key)>0 " +
-                "and pub_app_id in (select pub_app_id from om_adnetwork_app where api_key=?)  and adn_id=12";*/
-        String whereSql = String.format("b.api_key='%s'", userId);
-        String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s'", userId, userId);
-        List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+        List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
         Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
         List<Map<String, Object>> oldInstance = getOldInstanceList(insIds);
@@ -119,6 +113,7 @@ public class DownloadChartboost extends AdnBaseService {
         }
         int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
         if (task.runCount > 5 && task.runCount % 5 == 0 && status != 2) {
+            updateAccountException(jdbcTemplate, task.reportAccountId, error);
             LOG.error("[Chartboost] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
         }
         updateTaskStatus(jdbcTemplate, task.id, status, error);
@@ -241,9 +236,7 @@ public class DownloadChartboost extends AdnBaseService {
         LOG.info("[Chartboost] savePrepareReportData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         try {
-            String whereSql = String.format("b.api_key='%s'", userId);
-            String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s'", userId, userId);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

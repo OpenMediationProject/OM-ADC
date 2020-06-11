@@ -60,33 +60,37 @@ public class DownloadTapjoy extends AdnBaseService {
         }
     }
 
-    private void executeTapjoyTask(ReportTask o) {
-        String appKey = o.adnApiKey;
-        String authKey = o.adnAppToken;
-        String day = o.day;
+    private void executeTapjoyTask(ReportTask task) {
+        String appKey = task.adnApiKey;
+        String authKey = task.adnAppToken;
+        String day = task.day;
         if (StringUtils.isBlank(authKey)) {
             LOG.error("[Tapjoy]，authKey is null");
             return;
         }
         LOG.info("[Tapjoy] executeTaskImpl start, authKey:{}, day:{}", authKey, day);
         long start = System.currentTimeMillis();
-        updateTaskStatus(jdbcTemplate, o.id, 1, "");
+        updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
-        String json_data = downJsonData(o.id, authKey, day, err);
+        String json_data = downJsonData(task.id, authKey, day, err);
         if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
             error = jsonDataImportDatabase(json_data, day, appKey);
             if (StringUtils.isBlank(error) && !error.equals("data is null")) {
-                error = savePrepareReportData(o, day, appKey);
+                error = savePrepareReportData(task, day, appKey);
                 if (StringUtils.isBlank(error)) {
-                    error = reportLinkedToStat(o, appKey);
+                    error = reportLinkedToStat(task, appKey);
                 }
             }
         } else {
             error = err.toString();
         }
         int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
-        updateTaskStatus(jdbcTemplate, o.id, status, err.toString());
+        if (task.runCount > 5 && status != 2) {
+            updateAccountException(jdbcTemplate, task.reportAccountId, error);
+            LOG.error("[Tapjoy] executeTapjoyTask error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        }
+        updateTaskStatus(jdbcTemplate, task.id, status, err.toString());
         LOG.info("[Tapjoy] executeTaskImpl end, authKey:{}, day:{}, cost:{}", authKey, day, System.currentTimeMillis() - start);
     }
 
@@ -223,9 +227,7 @@ public class DownloadTapjoy extends AdnBaseService {
         LOG.info("[Tapjoy] savePrepareReportData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         try {
-            String whereSql = String.format("b.api_key='%s'", appKey);
-            String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s')", appKey, appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
@@ -237,7 +239,7 @@ public class DownloadTapjoy extends AdnBaseService {
             }
 
             String dataSql = "SELECT day,country,platform,placement_name data_key," +
-                    "sum(impressions) AS api_impr,sum(clicks) AS impr_click,sum(revenue) AS revenue" +
+                    "sum(impressions) AS api_impr,sum(clicks) AS api_click,sum(revenue) AS revenue" +
                     " FROM report_tapjoy WHERE day=? AND appKey=? GROUP BY day,country,placement_name,platform ";
 
             List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, appKey);

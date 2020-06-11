@@ -12,6 +12,9 @@ public class ReportTask {
     public String day;
     public int hour;
     public int adnId;
+    public int reportAccountId;
+    public int authType;
+    public String currency;
     public String queryId;
     public String adnAppId;
     public String adnApiKey;
@@ -21,6 +24,8 @@ public class ReportTask {
     public String reqUrl;
     public int runCount;
     public int status;
+    public int timeDimension;
+    public String msg;
     public String credentialPath;
 
     public int getId() {
@@ -53,6 +58,30 @@ public class ReportTask {
 
     public void setAdnId(int adnId) {
         this.adnId = adnId;
+    }
+
+    public int getReportAccountId() {
+        return reportAccountId;
+    }
+
+    public void setReportAccountId(int reportAccountId) {
+        this.reportAccountId = reportAccountId;
+    }
+
+    public int getAuthType() {
+        return authType;
+    }
+
+    public void setAuthType(int authType) {
+        this.authType = authType;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 
     public String getQueryId() {
@@ -125,6 +154,22 @@ public class ReportTask {
 
     public void setStatus(int status) {
         this.status = status;
+    }
+
+    public int getTimeDimension() {
+        return timeDimension;
+    }
+
+    public void setTimeDimension(int timeDimension) {
+        this.timeDimension = timeDimension;
+    }
+
+    public String getMsg() {
+        return msg;
+    }
+
+    public void setMsg(String msg) {
+        this.msg = msg;
     }
 
     public String getCredentialPath() {

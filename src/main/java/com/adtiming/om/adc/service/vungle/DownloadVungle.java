@@ -179,9 +179,7 @@ public class DownloadVungle extends AdnBaseService {
         LOG.info("[Vungle] savePrepareReportData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         try {
-            String whereSql = String.format("b.report_app_id='%s'", appKey);
-            String changeSql = String.format("(b.report_app_id='%s' or b.new_account_key='%s')", appKey, appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

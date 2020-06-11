@@ -92,21 +92,19 @@ public class APIController extends BaseController {
     @RequestMapping("/unity/rebuild")
     public Object rebuild(String[] day, int hour, Integer id) {
         if (id != null && id > 0) {
-            unity.rebuild(day, hour, id);
+            unity.rebuild(day, hour, id, 0);
         } else {
-            unity.rebuild(day, hour);
+            unity.rebuild(day, hour, 0);
         }
         return Response.build();
     }
 
     @RequestMapping("/unity/rebuild/day")
     public Object rebuildByDay(String[] day, Integer id) {
-        for (int i = 0; i < 24; i++) {
-            if (id != null && id > 0) {
-                unity.rebuild(day, i, id);
-            } else {
-                unity.rebuild(day, i);
-            }
+        if (id != null && id > 0) {
+            unity.rebuild(day, 0, id, 1);
+        } else {
+            unity.rebuild(day, 0, 1);
         }
         return Response.build();
     }

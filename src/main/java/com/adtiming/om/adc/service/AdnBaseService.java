@@ -132,6 +132,15 @@ public abstract class AdnBaseService {
         }
     }
 
+    /**
+     * update account exception
+     *
+     */
+    protected void updateAccountException(JdbcTemplate jdbcTemplateW, int accountId, String msg) {
+        //Exception
+        jdbcTemplateW.update("UPDATE report_adnetwork_account set status=2,reason=? WHERE id=?", msg, accountId);
+    }
+
     protected void updateReqUrl(JdbcTemplate jdbcTemplate, int id, String reqUrl) {
         if (StringUtils.isNotBlank(reqUrl)) {
             String sql = "UPDATE report_adnetwork_task SET req_url=? WHERE id=?";
@@ -147,7 +156,8 @@ public abstract class AdnBaseService {
         executeTask.remove(o.id);
     }
 
-    protected List<Map<String, Object>> getInstanceList(String whereSql, String changedSql) {
+    protected List<Map<String, Object>> getInstanceList(int reportAccountId) {
+        String whereSql = String.format("b.report_account_id=%d", reportAccountId);
         String sql = "SELECT a.id AS instance_id,a.placement_key,a.placement_id,a.pub_app_id,a.adn_id,a.ab_test_mode," +
                 "b.adn_app_key,c.publisher_id,c.ad_type," +
                 "d.plat,d.category,d.app_id," +
@@ -159,7 +169,7 @@ public abstract class AdnBaseService {
                 " LEFT JOIN om_publisher e ON c.publisher_id=e.id" +
                 " WHERE a.adn_id=? AND " + whereSql;
         List<Map<String, Object>> list = jdbcTemplate.queryForList(sql, adnId);
-        List<Map<String, Object>> oldList = getAccountChangedList(changedSql);
+        List<Map<String, Object>> oldList = getAccountChangedList(whereSql);
         if (!oldList.isEmpty()) {
             list.addAll(oldList);
         }
@@ -200,23 +210,44 @@ public abstract class AdnBaseService {
         return jdbcTemplate.queryForList(sql, adnId);
     }
 
+    public BigDecimal getCurrencyByDay(String currency, String day) {
+        try {
+            return jdbcTemplate.queryForObject("SELECT exchange_rate FROM om_currency_exchange_day WHERE day=? AND cur_from=?", BigDecimal.class, day, currency);
+        } catch (Exception e) {
+            try {
+                return jdbcTemplate.queryForObject("SELECT exchange_rate FROM om_currency_exchange WHERE day=? AND cur_from=?", BigDecimal.class, day, currency);
+            } catch (Exception ignored) {
+            }
+        }
+        return new BigDecimal(1);
+    }
+
     protected String toAdnetworkLinked(ReportTask task, String adnAccountKey, Map<String, Map<String, Object>> instanceInfoMap, List<ReportAdnData> data) {
         LOG.info("[{}] toAdnetworkLinked start, taskId:{}, day:{}", adnName, task.id, task.day);
         long start = System.currentTimeMillis();
         String error = "";
+        BigDecimal exchangeRate = new BigDecimal(1);
+        if (!task.currency.equals("USD")) {
+            exchangeRate = getCurrencyByDay(task.currency, task.day);
+        }
         try {
             if (instanceInfoMap.isEmpty())
                 return "instance is null";
 
             if (data.isEmpty())
                 return "data is null";
+            String whereSql = "";
+            error = "";
+            if (adnId == 3) {
+                whereSql = task.timeDimension == 0 ? "and hour=" + task.hour : "";
+            }
 
-            String deleteSql = "DELETE FROM report_adnetwork_linked WHERE adn_id=? AND day=? AND hour=? AND adn_account_key=?";
-            jdbcTemplate.update(deleteSql, adnId, task.day, task.hour, adnAccountKey);
+            String deleteSql = String.format("DELETE FROM report_adnetwork_linked WHERE adn_id=? AND day=? AND adn_account_key=? %s", whereSql);
+            jdbcTemplate.update(deleteSql, adnId, task.day, adnAccountKey);
             int count = 0;
             List<Object[]> lsParm = new ArrayList<>();
-            String insertSql = "INSERT INTO report_adnetwork_linked(day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,cost,revenue,api_request,api_filled,api_click,api_impr,api_video_start,api_video_complete,adn_account_key,adn_app_key,adn_placement_key)" +
-                    " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            String insertSql = "INSERT INTO report_adnetwork_linked(day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,currency,exchange_rate,cost,cost_ori,revenue,revenue_ori,api_request,api_filled,api_click,api_impr,api_video_start,api_video_complete,adn_account_key,adn_app_key,adn_placement_key)" +
+                    " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             for (ReportAdnData linked : data) {
                 try {
                     String dataKey = linked.dataKey;
@@ -229,15 +260,21 @@ public abstract class AdnBaseService {
                         sharing = sharing == null ? new BigDecimal(1.0) : sharing;
                         linked.revenue = linked.revenue == null ? BigDecimal.ZERO : linked.revenue;
                         linked.cost = linked.revenue.multiply(sharing);
-                        if (StringUtils.isBlank(linked.country)) {
+                        BigDecimal revenue = linked.revenue.multiply(exchangeRate);
+                        BigDecimal cost = linked.cost.multiply(exchangeRate);
+                        String country = StringUtils.isNoneBlank(linked.country) ? linked.country.toUpperCase() : "";
+                        if (StringUtils.isBlank(country)) {
                             continue;
+                        }
+                        if (country.equals("UK")) {
+                            country = "GB";
                         }
                         //facebook country Unknown
                         if (linked.country.length() > 2) {
                             linked.country = "";
                         }
-                        //day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adnId,instance_id,abt,cost,revenue,api_request,api_filled,api_click,api_impr,api_video_start,api_video_complete,adn_pub_id,adnAppId,adn_placement_key
-                        lsParm.add(new Object[]{linked.day, linked.hour, linked.country,
+
+                        lsParm.add(new Object[]{linked.day, linked.hour, country,
                                 MapHelper.getInt(instanceConf, "plat"),
                                 MapHelper.getInt(instanceConf, "publisher_id"),
                                 MapHelper.getInt(instanceConf, "pub_app_id"),
@@ -246,7 +283,8 @@ public abstract class AdnBaseService {
                                 adnId,
                                 MapHelper.getInt(instanceConf, "instance_id"),
                                 MapHelper.getInt(instanceConf, "ab_test_mode"),
-                                linked.cost, linked.revenue, linked.apiRequest,
+                                task.currency, exchangeRate,
+                                cost, linked.cost, revenue, linked.revenue, linked.apiRequest,
                                 linked.apiFilled, linked.apiClick, linked.apiImpr,
                                 linked.apiVideoStart, linked.apiVideoComplete,
                                 adnAccountKey, MapHelper.getString(instanceConf, "adn_app_key"),
@@ -278,21 +316,25 @@ public abstract class AdnBaseService {
         long start = System.currentTimeMillis();
         String error = "";
         try {
-            String sql = "DELETE FROM stat_adnetwork WHERE adn_id=? AND day=? and hour=? AND adn_account_key=?";
-            jdbcTemplate.update(sql, adnId, task.day, task.hour, accountKey);
-            sql = "INSERT INTO stat_adnetwork(day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,cost,revenue,api_request,api_filled,api_click,api_impr,api_video_start,api_video_complete,adn_account_key)" +
+            String whereSql = "";
+            if (adnId == 3) {
+                whereSql = task.timeDimension == 0 ? "and hour=" + task.hour : "";
+            }
+            String sql = "DELETE FROM stat_adnetwork WHERE adn_id=? AND day=? AND adn_account_key=? " + whereSql;
+            jdbcTemplate.update(sql, adnId, task.day, accountKey);
+            sql = String.format("INSERT INTO stat_adnetwork(day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,currency,exchange_rate,cost,cost_ori,revenue,revenue_ori,api_request,api_filled,api_click,api_impr,api_video_start,api_video_complete,adn_account_key)" +
                     "SELECT day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type," +
-                    "adn_id,instance_id,abt," +
-                    "sum(cost) cost," +
-                    "sum(revenue) revenue," +
+                    "adn_id,instance_id,abt,currency,exchange_rate," +
+                    "sum(cost) cost,sum(cost_ori) cost_ori," +
+                    "sum(revenue) revenue,sum(revenue_ori) revenue_ori," +
                     "sum(api_request) api_request," +
                     "sum(api_filled) api_filled," +
                     "sum(api_click) api_click,sum(api_impr) api_impr,sum(api_video_start) api_video_start," +
                     "sum(api_video_complete) api_video_complete,adn_account_key" +
                     " FROM report_adnetwork_linked" +
-                    " WHERE adn_id=? AND day=? and hour=? AND adn_account_key=?" +
-                    " GROUP BY day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,adn_account_key";
-            jdbcTemplate.update(sql, adnId, task.day, task.hour, accountKey);
+                    " WHERE adn_id=? AND day=? %s AND adn_account_key=?" +
+                    " GROUP BY day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,currency,exchange_rate,adn_account_key", whereSql);
+            jdbcTemplate.update(sql, adnId, task.day, accountKey);
         } catch (Exception e) {
             error = String.format("reportLinkedToStat error, msg:%s", e.getMessage());
         }

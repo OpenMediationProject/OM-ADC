@@ -44,7 +44,7 @@ public class DownloadIronSource extends AdnBaseService {
     private AppConfig cfg;
 
     @Resource
-    private JdbcTemplate jdbcTemplateW;
+    private JdbcTemplate jdbcTemplate;
 
     @Override
     public void setAdnInfo() {
@@ -71,7 +71,7 @@ public class DownloadIronSource extends AdnBaseService {
         }
         LOG.info("[IronSource] executeTaskImpl start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
-        updateTaskStatus(jdbcTemplateW, task.id, 1, "");
+        updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
         String json_data = downJsonData(task.id, username, secretKey, day, err);
@@ -88,10 +88,10 @@ public class DownloadIronSource extends AdnBaseService {
         }
         int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
         if (task.runCount > 5 && status != 2) {
-            //updateAccountException(jdbcTemplateW, task.report_account_id, error);
+            updateAccountException(jdbcTemplate, task.reportAccountId, error);
             LOG.error("[IronSource] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
         }
-        updateTaskStatus(jdbcTemplateW, task.id, status, error);
+        updateTaskStatus(jdbcTemplate, task.id, status, error);
         LOG.info("[IronSource] executeTaskImpl end, taskId:{}, cost:{}", task.id,System.currentTimeMillis() - start);
     }
 
@@ -103,7 +103,7 @@ public class DownloadIronSource extends AdnBaseService {
         try {
             String token = Base64.encode(username + ":" + secretKey);
             String reportUrl = String.format(REPORT_URL, day, day);
-            updateReqUrl(jdbcTemplateW, taskId, reportUrl);
+            updateReqUrl(jdbcTemplate, taskId, reportUrl);
             HttpGet httpGet = new HttpGet(reportUrl);
             httpGet.setHeader("Authorization", "Basic " + token);
             httpGet.setHeader("Accept", "application/json; */*");
@@ -144,7 +144,7 @@ public class DownloadIronSource extends AdnBaseService {
         int dataCount = 0;
         try {
             String deleteSql = "DELETE FROM report_ironsource WHERE `date`=? AND username=? ";
-            jdbcTemplateW.update(deleteSql, day, username);
+            jdbcTemplate.update(deleteSql, day, username);
 
             String insertSql = "INSERT INTO report_ironsource (`date`, country_code, app_key, platform, ad_units, instance_id, instance_name, bundle_id, " +
                     "app_name, revenue, ecpm, impressions, active_users, engaged_users, engagement_rate, impressions_per_engaged_user, revenue_per_active_user, " +
@@ -184,14 +184,14 @@ public class DownloadIronSource extends AdnBaseService {
                         lsParm.add(params);
                         dataCount++;
                         if (lsParm.size() >= 1000) {
-                            jdbcTemplateW.batchUpdate(insertSql, lsParm);
+                            jdbcTemplate.batchUpdate(insertSql, lsParm);
                             lsParm.clear();
                         }
                     }
                 }
             }
             if (!lsParm.isEmpty()) {
-                jdbcTemplateW.batchUpdate(insertSql, lsParm);
+                jdbcTemplate.batchUpdate(insertSql, lsParm);
             }
         } catch (Exception e) {
             error = String.format("insert report_ironsource error, msg:%s", e.getMessage());
@@ -227,13 +227,11 @@ public class DownloadIronSource extends AdnBaseService {
                     " where `date` =? and username=? " +
                     " group by `date`,country_code,ad_units,instance_id";
 
-            List<ReportAdnData> oriDataList = jdbcTemplateW.query(dataSql, ReportAdnData.ROWMAPPER, task.day, username);
+            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, task.day, username);
             if (oriDataList.isEmpty())
                 return "data is null";
 
-            String whereSql = String.format("b.client_id='%s'", username);
-            String changedWhereSql = String.format("(b.client_id='%s' or b.new_account_key='%s')", username, username);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changedWhereSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream()
                     .collect(Collectors.toMap(m ->
                                     String.format("%s_%s_%s", MapHelper.getString(m, "adn_app_key"), getAdTypeString(MapHelper.getInt(m, "ad_type")),
