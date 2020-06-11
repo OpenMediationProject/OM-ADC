@@ -1,14 +1,17 @@
 app:
-  env: dev
+  env: prod
 
 logging:
-  config: classpath:log4j2-dev.xml
+  config: classpath:log4j2-prod.xml
 
 http.proxy:
 auth:
   dir: auth
-  domain: localhost:19013/api
+  domain: xxx.xx.com
 download.dir: download
+admob:
+  client_id: your client id
+  client_secret: your client secret
 
 spring:
   ## datasource
@@ -16,4 +19,4 @@ spring:
     driver-class-name: com.mysql.jdbc.Driver
     url: jdbc:mysql://xxx/open_mediation?useCursorFetch=true&characterEncoding=utf8&useSSL=false
     username: xxx
-    password: xxx
+    password: xxxxx
