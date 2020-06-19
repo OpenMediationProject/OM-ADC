@@ -9,7 +9,9 @@ auth:
   dir: auth
   domain: your.domain.name
 download.dir: download
-
+admob:
+  client_id: your client id
+  client_secret: your client secret
 spring:
   ## datasource
   datasource:
