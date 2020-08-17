@@ -10,6 +10,10 @@ import com.adtiming.om.adc.service.AppConfig;
 import com.adtiming.om.adc.util.DateTimeFormat;
 import com.adtiming.om.adc.util.MapHelper;
 import com.adtiming.om.adc.util.MyHttpClient;
+import com.adtiming.om.adc.util.Util;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
@@ -28,10 +32,8 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.io.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -67,9 +69,7 @@ public class DownloadUnity extends AdnBaseService {
         String appKey = task.adnApiKey;
         String day = task.day;
         String hour = task.hour < 10 ? "0" + task.hour : String.valueOf(task.hour);
-        // Set up AdSense Management API client.
         if (StringUtils.isBlank(appKey)) {
-            //executeTaskIds.remove(task.id);
             LOG.error("[Unity] appKey is null");
             return;
         }
@@ -78,36 +78,159 @@ public class DownloadUnity extends AdnBaseService {
         try {
             updateTaskStatus(jdbcTemplate, task.id, 1, "");
 
-            String startDate = day + "T" + hour + ":00:00.000Z";
-            String endDate = day + "T" + hour + ":59:59.999Z";
-            String url = "https://gameads-admin.applifier.com/stats/monetization-api?apikey=" + appKey
-                    + "&splitBy=source,zone,country&fields=adrequests,available,offers,started,views,revenue" +
-                    "&start=" + startDate + "&end=" + endDate + "&scale=hour";
-            updateReqUrl(jdbcTemplate, task.id, url);
+            boolean isHour = task.timeDimension == 0;
+            String startDate = String.format("%sT%s:00:00.000Z", day, isHour ? hour : "00");
+            String endDate = String.format("%sT%s:59:59.999Z", day, isHour ? hour : "23");
+            String scale = isHour ? "hour" : "day";
             StringBuilder sb = new StringBuilder();
-            String file_path = DownCsvFile(url, day, hour, appKey, sb);
             String error;
-            if (StringUtils.isNotBlank(file_path)) {
-                error = ReadCsvFile(task, file_path, day, hour, appKey);
-                if (StringUtils.isBlank(error)) {
-                    error = savePrepareReportData(task, day, task.hour, appKey);
-                    if (StringUtils.isBlank(error)) {
-                        error = reportLinkedToStat(task, appKey);
-                    }
-                }
+            task.step = 1;
+            if (StringUtils.isNoneBlank(task.userId)) {
+                error = excuteByNewApi(task, startDate, endDate, scale);
             } else {
-                error = sb.toString();
+                error = excuteByOldApi(task, hour, startDate, endDate, scale);
             }
-            int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+            if (StringUtils.isBlank(error)) {
+                task.step = 3;
+                error = savePrepareReportData(task, day, task.hour, task.adnApiKey);
+                if (StringUtils.isBlank(error)) {
+                    task.step = 4;
+                    error = reportLinkedToStat(task, task.adnApiKey);
+                }
+            }
+            int status = getStatus(error);
+            error = convertMsg(error);
             if (task.runCount > 5 && status != 2) {
+                updateAccountException(jdbcTemplate, task, error);
                 LOG.error("[Unity] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+            } else {
+                updateTaskStatus(jdbcTemplate, task.id, status, error);
             }
-            updateTaskStatus(jdbcTemplate, task.id, status, error);
         } catch (Exception e) {
             updateTaskStatus(jdbcTemplate, task.id, 3, e.getMessage());
         }
         //executeTaskIds.remove(task.id);
         LOG.info("[Unity] download end,appKey:{}, day:{}, hour:{}, cost:{}", appKey, day, hour, System.currentTimeMillis() - start);
+    }
+
+    private String excuteByOldApi(ReportTask task, String hour, String startDate, String endDate, String scale) {
+        String url = String.format("https://gameads-admin.applifier.com/stats/monetization-api?apikey=%s&splitBy=source,zone,country&fields=adrequests,available,offers,started,views,revenue&start=%s&end=%s&scale=%s", task.adnApiKey, startDate, endDate, scale);
+        updateReqUrl(jdbcTemplate, task.id, url);
+        StringBuilder sb = new StringBuilder();
+        String file_path = DownCsvFile(url, task.day, hour, task.adnApiKey, sb);
+        String error;
+        if (StringUtils.isNotBlank(file_path)) {
+            error = ReadCsvFile(task, file_path, task.day, hour, task.adnApiKey);
+            if (StringUtils.isBlank(error)) {
+                return "";
+            }
+        } else {
+            error = sb.toString();
+        }
+        return error;
+    }
+
+    private String excuteByNewApi(ReportTask task, String startDate, String endDate, String scale) {
+        String url = String.format("https://monetization.api.unity.com/stats/v1/operate/organizations/%s?apikey=%s&fields=adrequest_count,start_count,view_count,available_sum,revenue_sum&groupBy=game,platform,placement,country&start=%s&end=%s&scale=%s", task.userId, task.adnApiKey, startDate, endDate, scale);
+        updateReqUrl(jdbcTemplate, task.id, url);
+        StringBuilder sb = new StringBuilder();
+        String error;
+        String jsonData = getJsonData(url, sb);
+        if (StringUtils.isNoneBlank(jsonData) && sb.length() == 0) {
+            error = jsonToDB(task, jsonData);
+        } else {
+            error = sb.toString();
+        }
+        return error;
+    }
+
+    private String getJsonData(String url, StringBuilder sb) {
+        String json = "";
+        HttpEntity entity = null;
+        try {
+            HttpGet httpGet = new HttpGet(url);
+            RequestConfig requestConfig = RequestConfig.custom()
+                    .setSocketTimeout(5 * 60 * 1000)//5分钟
+                    .setProxy(cfg.httpProxy)
+                    .setCookieSpec(CookieSpecs.IGNORE_COOKIES)
+                    .build();
+            httpGet.setConfig(requestConfig);
+            httpGet.setHeader("Accept", "application/json");
+            //发送Post,并返回一个HttpResponse对象
+            HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
+            entity = response.getEntity();
+            StatusLine sl = response.getStatusLine();
+            if (entity == null) {
+                sb.append("response data is null");
+                return json;
+            }
+            if (sl.getStatusCode() != 200) {//如果状态码为200,就是正常返回
+                sb.append(String.format("response status code is not 200,statusCode:%d,msg:%s", sl.getStatusCode(), EntityUtils.toString(entity)));
+                return json;
+            }
+
+            json = EntityUtils.toString(entity);
+        } catch (Exception ex) {
+            sb.append(String.format("getJsonData error,error:%s", ex.getMessage()));
+        } finally {
+            EntityUtils.consumeQuietly(entity);
+        }
+        return json;
+    }
+
+    private String jsonToDB(ReportTask task, String jsonData) {
+        task.step = 2;
+        long start = System.currentTimeMillis();
+        LOG.info("[Unity] jsonToDB start,taskId:{}", task.id);
+        String error = "";
+        int count = 0;
+        try {
+            String deleteSql = String.format("delete from report_unity where day=? and app_key=? %s", task.timeDimension == 0 ? "and hour=" + task.hour : "");
+            jdbcTemplate.update(deleteSql, task.day, task.adnApiKey);
+        } catch (Exception e) {
+            return String.format("delete report_unity error,%s", e.getMessage());
+        }
+        try {
+            JSONArray array = JSON.parseArray(jsonData);
+            if (!array.isEmpty()) {
+                List<Object[]> insertParams = new ArrayList<>();
+                count = array.size();
+                String insertSql = "INSERT into report_unity (day,hour,source_game_id,source_game_name,source_zone,country," +
+                        "country_tier,adrequests,available,offers,started,views,revenue,app_key)  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                for (int i = 0; i < count; i++) {
+                    JSONObject obj = array.getJSONObject(i);
+                    String reportDay;
+                    String reportHour;
+                    try {
+                        LocalDateTime time = LocalDateTime.parse(Util.getJSONString(obj, "timestamp"), DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH));
+                        reportDay = DateTimeFormat.DAY_FORMAT.format(time);
+                        reportHour = DateTimeFormat.HOUR_FORMAT.format(time);
+                    } catch (Exception e) {
+                        reportDay = task.day;
+                        reportHour = String.valueOf(task.hour);
+                    }
+                    insertParams.add(new Object[] {reportDay, reportHour,
+                            Util.getJSONString(obj, "source_game_id"), Util.getJSONString(obj, "source_name"),
+                            Util.getJSONString(obj, "placement"),
+                            Util.getJSONString(obj, "country"), 0, Util.getJSONInt(obj, "adrequest_count"),
+                            Util.getJSONInt(obj, "available_sum"), 0, Util.getJSONInt(obj, "start_count"),
+                            Util.getJSONInt(obj, "view_count"), Util.getJSONDecimal(obj, "revenue_sum"),
+                            task.adnApiKey
+                    });
+                    if (insertParams.size() >= 1000) {
+                        jdbcTemplate.batchUpdate(insertSql, insertParams);
+                        insertParams.clear();
+                    }
+                }
+                if (!insertParams.isEmpty()) {
+                    jdbcTemplate.batchUpdate(insertSql, insertParams);
+                }
+            }
+        } catch (Exception e) {
+            error = e.getMessage();
+        }
+        LOG.info("[Unity] insert report_unity finished, taskId:{}, count:{}, cost:{}", task.id, count, System.currentTimeMillis() - start);
+        return error;
     }
 
     private String DownCsvFile(String url, String day, String hour, String appKey, StringBuilder sb) {

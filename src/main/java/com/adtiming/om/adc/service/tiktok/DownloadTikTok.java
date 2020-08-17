@@ -71,20 +71,25 @@ public class DownloadTikTok extends AdnBaseService {
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
-
+        task.step = 1;
         String json_data = downJsonData(task.id, userId, userSecret, day, err);
         if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
+            task.step = 2;
             error = jsonDataImportDatabase(json_data, day, userId, userSecret);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = savePrepareReportData(task, day, userSecret);
-                if (StringUtils.isBlank(error))
+                if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, userSecret);
+                }
             }
         } else {
             error = err.toString();
         }
 
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && status != 2) {
             LOG.error("[TikTok] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
         }

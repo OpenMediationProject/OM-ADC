@@ -75,24 +75,30 @@ public class DownloadApplovin extends AdnBaseService {
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
+        task.step = 1;
         String json_data = downJsonData(task, appId, apiKey, day, err);
         if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
+            task.step = 2;
             error = jsonDataImportDatabase(json_data, day, appId, apiKey);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = savePrepareReportData(task, day, appId);
-                if (StringUtils.isBlank(error))
+                if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, appId);
+                }
             }
         } else {
             error = err.toString();
         }
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && status != 2) {
-            updateAccountException(jdbcTemplate, task.reportAccountId, error);
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Applovin] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
-
         LOG.info("[Applovin] executeTaskImpl end, appId:{}, apiKey:{}, day:{}, cost:{}", appId, apiKey, day, System.currentTimeMillis() - start);
     }
 
@@ -191,8 +197,6 @@ public class DownloadApplovin extends AdnBaseService {
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
-            /*placements.putAll(instanceInfoList.stream().collect(Collectors.toMap(m ->
-                    MapHelper.getString(m, "app_id"), m -> m, (existingValue, newValue) -> existingValue)));*/
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o-> getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -200,8 +204,6 @@ public class DownloadApplovin extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
-                /*placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
-                        MapHelper.getString(m, "app_id"), m -> m, (existingValue, newValue) -> existingValue)));*/
             }
 
             String dataSql = "select day,left(ifnull(hour,0),2) hour,country,platform,zone_id data_key," +

@@ -68,6 +68,7 @@ public class DownloadFacebook extends AdnBaseService {
         try {
             //改任务状态
             updateTaskStatus(jdbcTemplate, task.id, 1, "start");//start
+            task.step = 1;
             JSONArray results = requestFBApi(task);
             if (results == null) {
                 LOG.warn("[facebook] download report response [data->results] is null, task:{}", JSONObject.toJSONString(task));
@@ -130,19 +131,24 @@ public class DownloadFacebook extends AdnBaseService {
                 setDataRow(insertObj, metric, value);
                 insertMap.put(key, insertObj);
             }
+            task.step = 2;
             String error = saveData(insertMap, task);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = savePrepareReportData(task, task.day, task.adnAppId);
                 if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, task.adnAppId);
                 }
             }
-            int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+            int status = getStatus(error);
+            error = convertMsg(error);
             if (task.runCount > 5 && task.runCount % 5 == 0 && status != 2) {
-                updateAccountException(jdbcTemplate, task.reportAccountId, error);
+                updateAccountException(jdbcTemplate, task, error);
                 LOG.error("[facebook] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+            } else {
+                updateTaskStatus(jdbcTemplate, task.id, status, error);
             }
-            updateTaskStatus(jdbcTemplate, task.id, status, error);
 
         } catch (Exception e) {
             updateTaskStatus(jdbcTemplate, task.id, 3, e.getMessage());

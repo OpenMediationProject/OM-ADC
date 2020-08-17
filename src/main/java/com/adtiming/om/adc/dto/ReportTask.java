@@ -27,6 +27,7 @@ public class ReportTask {
     public int timeDimension;
     public String msg;
     public String credentialPath;
+    public int step;
 
     public int getId() {
         return id;
@@ -178,5 +179,13 @@ public class ReportTask {
 
     public void setCredentialPath(String credentialPath) {
         this.credentialPath = credentialPath;
+    }
+
+    public int getStep() {
+        return step;
+    }
+
+    public void setStep(int step) {
+        this.step = step;
     }
 }

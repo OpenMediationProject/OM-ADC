@@ -78,24 +78,30 @@ public class DownloadAdtiming extends AdnBaseService {
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
+        task.step = 1;
         String json_data = downJsonData(task.id, token, day, err);
         if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
+            task.step = 2;
             error = jsonDataImportDatabase(json_data, day, token);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = saveReportData(task);
-                if (StringUtils.isBlank(error))
+                if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, token);
+                }
             }
         } else {
             error = err.toString();
         }
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && status != 2) {
-            updateAccountException(jdbcTemplate, task.reportAccountId, error);
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Adtiming] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
-
         LOG.info("[Adtiming] executeTaskImpl end, pubToken:{}, cost:{}", token, day, System.currentTimeMillis() - start);
     }
 

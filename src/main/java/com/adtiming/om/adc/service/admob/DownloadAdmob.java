@@ -62,6 +62,7 @@ public class DownloadAdmob extends AdnBaseService {
         try {
             updateTaskStatus(jdbcTemplate, task.id, 1, "");
             AdsenseReportsGenerateResponse res;
+            task.step = 1;
             if (task.authType == 0) {//0:开发者账号授权拉取
                 AuthAdmob auth = new AuthAdmob(cfg.proxy, cfg.authDir, task.adnApiKey, task.adnAppToken, task.credentialPath, cfg.authDomain);
                 res = download(auth.getAdSense(), task.userId, task.day, err);
@@ -71,25 +72,28 @@ public class DownloadAdmob extends AdnBaseService {
                 res = downloadWithDevAccount(task, err);
             }
             if (res != null && !res.isEmpty() && err.length() == 0) {
+                task.step = 2;
                 error = saveResponseData(res, task.userId);
                 if (StringUtils.isBlank(error)) {
+                    task.step = 3;
                     String accountKey = "ca-app-" + task.userId;
                     error = savePrepareReportData(task, accountKey);
                     if (StringUtils.isBlank(error)) {
-
+                        task.step = 4;
                         error = reportLinkedToStat(task, accountKey);
                     }
                 }
             } else {
                 error = err.toString();
             }
-            int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+            int status = getStatus(error);
+            error = convertMsg(error);
             if (task.runCount > 5 && status != 2) {
-                updateAccountException(jdbcTemplate, task.reportAccountId, error);
+                updateAccountException(jdbcTemplate, task, error);
                 LOG.error("[Admob] executeTask error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+            } else {
+                updateTaskStatus(jdbcTemplate, task.id, status, error);
             }
-            updateTaskStatus(jdbcTemplate, task.id, status, error);
-
             LOG.info("[Admob] executeTask end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
         } catch (Exception e) {
             updateTaskStatus(jdbcTemplate, task.id, 3, e.getMessage());
@@ -105,117 +109,132 @@ public class DownloadAdmob extends AdnBaseService {
         }
         LOG.info("[Admob] download start, accountId:{}, day:{}", accountId, day);
         long start = System.currentTimeMillis();
-        LocalDate date = LocalDate.parse(day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
-        String dayDif = count + "d";
-        if (count == 0) {
-            dayDif = "";
-        }
-        String startDate = "today" + dayDif;
-        String endDate = "today" + dayDif;
+        try {
+            LocalDate date = LocalDate.parse(day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
+            String dayDif = count + "d";
+            if (count == 0) {
+                dayDif = "";
+            }
+            String startDate = "today" + dayDif;
+            String endDate = "today" + dayDif;
 
-        AdSense.Accounts.Reports.Generate request = adsense.accounts().reports().generate(accountId, startDate, endDate);
-        request.setUseTimezoneReporting(true);
-        request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
-                "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
-                "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
-                "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
-        request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
+            AdSense.Accounts.Reports.Generate request = adsense.accounts().reports().generate(accountId, startDate, endDate);
+            request.setUseTimezoneReporting(true);
+            request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
+                    "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
+                    "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
+                    "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
+            request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
 
 //         Sort by ascending date.
-        request.setSort(Collections.singletonList("+DATE"));
+            request.setSort(Collections.singletonList("+DATE"));
 
-        AdsenseReportsGenerateResponse response = request.execute();
+            AdsenseReportsGenerateResponse response = request.execute();
 
-        if (response == null || response.isEmpty()) {
-            err.append("reponse is null or empty");
+            if (response == null || response.isEmpty()) {
+                err.append("reponse is null or empty");
+            }
+            LOG.info("[Admob] download end, accountId:{}, day:{}, cost:{}", accountId, day, System.currentTimeMillis() - start);
+            return response;
+        } catch (Exception e) {
+            err.append(e.getMessage());
         }
-        LOG.info("[Admob] download end, accountId:{}, day:{}, cost:{}", accountId, day, System.currentTimeMillis() - start);
-        return response;
+        return null;
     }
 
     private AdsenseReportsGenerateResponse downloadWithDevAccount(ReportTask task, StringBuilder err) throws Exception {
         LOG.info("[Admob] download start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
-        NetHttpTransport transport = new NetHttpTransport.Builder().setProxy(cfg.proxy).build();
-        GoogleCredential credential = new GoogleCredential.Builder()
-                .setJsonFactory(JacksonFactory.getDefaultInstance())
-                .setTransport(transport)
-                .setClientSecrets(task.adnApiKey, task.userSignature)
-                .build()
-                .setRefreshToken(task.adnAppToken);
-        //.setFromTokenResponse(tokenResponse);
+        try {
+            NetHttpTransport transport = new NetHttpTransport.Builder().setProxy(cfg.proxy).build();
+            GoogleCredential credential = new GoogleCredential.Builder()
+                    .setJsonFactory(JacksonFactory.getDefaultInstance())
+                    .setTransport(transport)
+                    .setClientSecrets(task.adnApiKey, task.userSignature)
+                    .build()
+                    .setRefreshToken(task.adnAppToken);
+            //.setFromTokenResponse(tokenResponse);
 
-        AdSense adsense = new AdSense.Builder(transport,
-                JacksonFactory.getDefaultInstance(), credential)
-                .setApplicationName("google_api")
-                .build();
-        LocalDate date = LocalDate.parse(task.day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
-        String dayDif = count + "d";
-        if (count == 0) {
-            dayDif = "";
-        }
-        String startDate = "today" + dayDif;
-        String endDate = "today" + dayDif;
-        AdSense.Reports.Generate request = adsense.reports().generate(startDate, endDate);
-        request.setUseTimezoneReporting(true);
-        request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
-                "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
-                "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
-                "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
-        request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
+            AdSense adsense = new AdSense.Builder(transport,
+                    JacksonFactory.getDefaultInstance(), credential)
+                    .setApplicationName("google_api")
+                    .build();
+            LocalDate date = LocalDate.parse(task.day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
+            String dayDif = count + "d";
+            if (count == 0) {
+                dayDif = "";
+            }
+            String startDate = "today" + dayDif;
+            String endDate = "today" + dayDif;
+            AdSense.Reports.Generate request = adsense.reports().generate(startDate, endDate);
+            request.setUseTimezoneReporting(true);
+            request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
+                    "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
+                    "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
+                    "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
+            request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
 //         Sort by ascending date.
-        request.setSort(Collections.singletonList("+DATE"));
+            request.setSort(Collections.singletonList("+DATE"));
 
-        AdsenseReportsGenerateResponse response = request.execute();
-        if (response == null || response.isEmpty()) {
-            err.append("reponse is null or empty");
+            AdsenseReportsGenerateResponse response = request.execute();
+            if (response == null || response.isEmpty()) {
+                err.append("reponse is null or empty");
+            }
+            LOG.info("[Admob] download end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
+            return response;
+        } catch (Exception e) {
+            err.append(e.getMessage());
         }
-        LOG.info("[Admob] download end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
-        return response;
+        return null;
     }
 
     private AdsenseReportsGenerateResponse downloadWithOwnAccount(ReportTask task, StringBuilder err) throws Exception {
         LOG.info("[Admob] download start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
-        NetHttpTransport transport = new NetHttpTransport.Builder().setProxy(cfg.proxy).build();
-        GoogleCredential credential = new GoogleCredential.Builder()
-                .setJsonFactory(JacksonFactory.getDefaultInstance())
-                .setTransport(transport)
-                .setClientSecrets(cfg.adtClientId, cfg.adtClientSecret)
-                .build()
-                .setRefreshToken(task.adnAppToken);
-        //.setFromTokenResponse(tokenResponse);
+        try {
+            NetHttpTransport transport = new NetHttpTransport.Builder().setProxy(cfg.proxy).build();
+            GoogleCredential credential = new GoogleCredential.Builder()
+                    .setJsonFactory(JacksonFactory.getDefaultInstance())
+                    .setTransport(transport)
+                    .setClientSecrets(cfg.adtClientId, cfg.adtClientSecret)
+                    .build()
+                    .setRefreshToken(task.adnAppToken);
+            //.setFromTokenResponse(tokenResponse);
 
-        AdSense adsense = new AdSense.Builder(transport,
-                JacksonFactory.getDefaultInstance(), credential)
-                .setApplicationName("google_api")
-                .build();
-        LocalDate date = LocalDate.parse(task.day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
-        String dayDif = count + "d";
-        if (count == 0) {
-            dayDif = "";
-        }
-        String startDate = "today" + dayDif;
-        String endDate = "today" + dayDif;
-        AdSense.Reports.Generate request = adsense.reports().generate(startDate, endDate);
-        request.setUseTimezoneReporting(true);
-        request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
-                "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
-                "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
-                "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
-        request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
+            AdSense adsense = new AdSense.Builder(transport,
+                    JacksonFactory.getDefaultInstance(), credential)
+                    .setApplicationName("google_api")
+                    .build();
+            LocalDate date = LocalDate.parse(task.day, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            long count = date.toEpochDay() - LocalDateTime.now().toLocalDate().toEpochDay();
+            String dayDif = count + "d";
+            if (count == 0) {
+                dayDif = "";
+            }
+            String startDate = "today" + dayDif;
+            String endDate = "today" + dayDif;
+            AdSense.Reports.Generate request = adsense.reports().generate(startDate, endDate);
+            request.setUseTimezoneReporting(true);
+            request.setMetric(Arrays.asList("AD_REQUESTS", "AD_REQUESTS_COVERAGE", "AD_REQUESTS_CTR", "AD_REQUESTS_RPM",
+                    "CLICKS", "COST_PER_CLICK", "EARNINGS", "INDIVIDUAL_AD_IMPRESSIONS", "INDIVIDUAL_AD_IMPRESSIONS_CTR",
+                    "INDIVIDUAL_AD_IMPRESSIONS_RPM", "MATCHED_AD_REQUESTS", "MATCHED_AD_REQUESTS_CTR",
+                    "MATCHED_AD_REQUESTS_RPM", "PAGE_VIEWS", "PAGE_VIEWS_CTR", "PAGE_VIEWS_RPM"));
+            request.setDimension(Arrays.asList("DATE", "COUNTRY_CODE", "AD_CLIENT_ID", "AD_UNIT_ID"));
 //         Sort by ascending date.
-        request.setSort(Collections.singletonList("+DATE"));
+            request.setSort(Collections.singletonList("+DATE"));
 
-        AdsenseReportsGenerateResponse response = request.execute();
-        if (response == null || response.isEmpty()) {
-            err.append("reponse is null or empty");
+            AdsenseReportsGenerateResponse response = request.execute();
+            if (response == null || response.isEmpty()) {
+                err.append("reponse is null or empty");
+            }
+            LOG.info("[Admob] download end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
+            return response;
+        } catch (Exception e) {
+            err.append(e.getMessage());
         }
-        LOG.info("[Admob] download end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
-        return response;
+        return null;
     }
 
     private String saveResponseData(AdsenseReportsGenerateResponse response, String accountKey) {

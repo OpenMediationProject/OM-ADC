@@ -75,39 +75,44 @@ public class DownloadMintegral extends AdnBaseService {
         LOG.info("[Mintegral] executeTaskImpl start, skey:{}, secret:{}, day:{}", skey, secret, day);
         long start = System.currentTimeMillis();
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
-        String error = downLoadData(task.id, skey, secret, day, day);
+        String error = downLoadData(task, skey, secret, day, day);
         if (StringUtils.isBlank(error)) {
+            task.step = 3;
             error = savePrepareReportData(task, day, skey);
-            if (StringUtils.isBlank(error))
+            if (StringUtils.isBlank(error)) {
+                task.step = 4;
                 error = reportLinkedToStat(task, skey);
+            }
         }
 
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && status != 2) {
-            updateAccountException(jdbcTemplate, task.reportAccountId, error);
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Mintegral] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
-
         LOG.info("[Mintegral] executeTaskImpl end, skey:{}, secret:{}, day:{}, cost:{}", skey, secret, day, System.currentTimeMillis() - start);
     }
 
-    private String downLoadData(int taskId, String skey, String secret, String startDate, String endDate) {
+    private String downLoadData(ReportTask task, String skey, String secret, String startDate, String endDate) {
         String error = "";
         StringBuilder err = new StringBuilder();
         try {
-            String jsonData = downloadPageJsonData(taskId, skey, secret, startDate, endDate, 0, err);
+            task.step = 1;
+            String jsonData = downloadPageJsonData(task.id, skey, secret, startDate, endDate, 0, err);
             if (StringUtils.isNotBlank(jsonData) && err.length() == 0) {
                 JSONObject jsonObject = JSONObject.parseObject(jsonData);
                 if ("ok".equals(jsonObject.getString("code").toLowerCase())) {
                     JSONObject obj = jsonObject.getJSONObject("data");
-                    err.append(jsonDataImportDatabase(obj.getString("lists"), startDate, skey, 0));
+                    err.append(jsonDataImportDatabase(task, obj.getString("lists"), startDate, skey, 0));
                     int total_page = obj.getIntValue("total_page");
                     for (int i = 1; i < total_page; i++) {
-                        jsonData = downloadPageJsonData(taskId, skey, secret, startDate, endDate, i, err);
+                        jsonData = downloadPageJsonData(task.id, skey, secret, startDate, endDate, i, err);
                         if (StringUtils.isNotBlank(jsonData) && err.length() == 0) {
                             JSONObject sObj = JSONObject.parseObject(jsonData);
-                            err.append(jsonDataImportDatabase(sObj.getJSONObject("data").getString("lists"), startDate, skey, i));
+                            err.append(jsonDataImportDatabase(task, sObj.getJSONObject("data").getString("lists"), startDate, skey, i));
                         }
                     }
                     if (err.length() > 0) {
@@ -178,7 +183,8 @@ public class DownloadMintegral extends AdnBaseService {
         return pb.format();
     }
 
-    private String jsonDataImportDatabase(String jsonData, String day, String appKey, int page) {
+    private String jsonDataImportDatabase(ReportTask task, String jsonData, String day, String appKey, int page) {
+        task.step = 2;
         if (page == 0) {
             String sql_delete = "delete from report_mintegral where day=? and app_key=? ";
             try {

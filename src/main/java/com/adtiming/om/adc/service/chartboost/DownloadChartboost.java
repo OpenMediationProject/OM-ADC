@@ -86,6 +86,7 @@ public class DownloadChartboost extends AdnBaseService {
         }
         String error;
         //List<String> data = jdbcTemplate.queryForList(instanceSql, String.class, userId);
+        task.step = 1;
         if (!instanceInfoList.isEmpty()) {
             List<Boolean> bl = new ArrayList<>();
             for (Map<String, Object> ins : instanceInfoList) {
@@ -93,30 +94,36 @@ public class DownloadChartboost extends AdnBaseService {
                 if (StringUtils.isBlank(placementKey))
                     continue;
                 StringBuilder sb = new StringBuilder();
+                task.step = 1;
                 String jsonData = downJsonData(userId, userSignature, date, date, placementKey, sb);
                 if (StringUtils.isNoneBlank(jsonData) && sb.length() == 0) {//request error
+                    task.step = 2;
                     String err = jsonDataImportDatabase(jsonData, date, userId, placementKey);
                     boolean flag = StringUtils.isBlank(err) || "data is null".equals(err);
                     bl.add(flag);
                 }
             }
             if (bl.size() == instanceInfoList.size()) {
+                task.step = 3;
                 error = savePrepareReportData(task, date, userId);
                 if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, userId);
                 }
             } else {
                 error = "downJsonData failed";
             }
         } else {
-            error = "placement_key is empty";
+            error = "instance is null";
         }
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && task.runCount % 5 == 0 && status != 2) {
-            updateAccountException(jdbcTemplate, task.reportAccountId, error);
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Chartboost] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
         LOG.info("[Chartboost] download finished, userId:{},date:{},cost:{}", userId, date, System.currentTimeMillis() - start);
     }
 
