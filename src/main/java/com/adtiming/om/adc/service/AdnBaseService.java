@@ -411,7 +411,7 @@ public abstract class AdnBaseService {
     public int getStatus(String msg) {
         int status = 2;
         if (StringUtils.isNoneBlank(msg)) {
-            if ("data is null".equals(msg) || "instance is null".equals(msg)) {
+            if ("data is null".equals(msg) || "instance is null".equals(msg) || "data is null".equals(msg)) {
                 status = 2;
             } else {
                 status = 3;
