@@ -141,6 +141,7 @@ public class BaseTask {
                 keyField = "adn_app_id";
                 break;
             case 7://AdColony
+            case 18:
                 keyField = "adn_app_token";
                 break;
             case 4://Unity
@@ -162,6 +163,7 @@ public class BaseTask {
         switch (adnId) {
             case 1://adtiming
             case 7://AdColony
+            case 18: //Mint
                 fileds = new String[]{"adn_app_token"};
                 break;
             case 2://admob

@@ -7,16 +7,17 @@ logging:
 http.proxy:
 auth:
   dir: auth
-  domain: xxx.xx.com
+  #like 'localhost:19013/api'
+  domain: replace_with_your_om_ds_server_domain_and_base_path
 download.dir: download
 admob:
-  client_id: your client id
-  client_secret: your client secret
+  client_id: replace_with_your_client_id
+  client_secret: replace_with_your_client_secret
 
 spring:
   ## datasource
   datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: com.mysql.jdbc.Driver
     url: jdbc:mysql://xxx/open_mediation?useCursorFetch=true&characterEncoding=utf8&useSSL=true&requireSSL=false
     username: xxx
     password: xxxxx

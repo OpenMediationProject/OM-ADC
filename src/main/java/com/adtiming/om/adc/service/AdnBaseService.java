@@ -31,7 +31,7 @@ public abstract class AdnBaseService {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
-    private BlockingQueue<ReportTask> taskQueue = new LinkedBlockingQueue<>(100);
+    private final BlockingQueue<ReportTask> taskQueue = new LinkedBlockingQueue<>(100);
 
     @Resource
     private ThreadPoolTaskExecutor executor;
@@ -47,14 +47,13 @@ public abstract class AdnBaseService {
         run();
     }
 
-    private Set<Integer> executeTask = new HashSet<>();
+    private final Set<Integer> executeTask = new HashSet<>();
 
     private List<ReportApiError> apiErrorList = Collections.EMPTY_LIST;
 
     @Scheduled(cron = "0 */5 * * * ?")
     private void refreshReportAPIError() {
         List<ReportApiError> apiErrorConfiglist = new ArrayList<>();
-        Map<String, Map<String, ReportApiError>> ecrMap = new HashMap<>();
         jdbcTemplate.query("select * from report_adnetwork_error where adn_id=? and status=1", rs -> {
             ReportApiError apiError = ReportApiError.ROWMAPPER.mapRow(rs, rs.getRow());
             apiErrorConfiglist.add(apiError);
@@ -289,7 +288,7 @@ public abstract class AdnBaseService {
     protected String toAdnetworkLinked(ReportTask task, String adnAccountKey, Map<String, Map<String, Object>> instanceInfoMap, List<ReportAdnData> data) {
         LOG.info("[{}] toAdnetworkLinked start, taskId:{}, day:{}", adnName, task.id, task.day);
         long start = System.currentTimeMillis();
-        String error = "";
+        String error;
         BigDecimal exchangeRate = new BigDecimal(1);
         if (!task.currency.equals("USD")) {
             exchangeRate = getCurrencyByDay(task.currency, task.day);
@@ -321,7 +320,7 @@ public abstract class AdnBaseService {
                     if (instanceConf != null) {
                         count++;
                         BigDecimal sharing = MapHelper.getBigDecimal(instanceConf, "revenue_sharing");
-                        sharing = sharing == null ? new BigDecimal(1.0) : sharing;
+                        sharing = sharing == null ? new BigDecimal("1.0") : sharing;
                         linked.revenue = linked.revenue == null ? BigDecimal.ZERO : linked.revenue;
                         linked.cost = linked.revenue.multiply(sharing);
                         BigDecimal revenue = linked.revenue.multiply(exchangeRate);

@@ -11,6 +11,7 @@ import com.adtiming.om.adc.service.applovin.RequestApplovin;
 import com.adtiming.om.adc.service.chartboost.RequestChartboost;
 import com.adtiming.om.adc.service.facebook.RequestFacebook;
 import com.adtiming.om.adc.service.ironsource.RequestIronSource;
+import com.adtiming.om.adc.service.mint.RequestMint;
 import com.adtiming.om.adc.service.mintegral.RequestMintegral;
 import com.adtiming.om.adc.service.mopub.RequestMopub;
 import com.adtiming.om.adc.service.tapjoy.RquestTapjoy;
@@ -63,6 +64,9 @@ public class APIController extends BaseController {
 
     @Resource
     private RequestIronSource ironSource;
+
+    @Resource
+    private RequestMint mint;
 
     @RequestMapping("/test")
     public Object test() {
@@ -205,6 +209,16 @@ public class APIController extends BaseController {
             ironSource.rebuild(day, id);
         } else {
             ironSource.rebuild(day);
+        }
+        return Response.build();
+    }
+
+    @RequestMapping("/mint/rebuild")
+    public Object rebuildMint(String[] day, Integer id) {
+        if (id != null && id >0) {
+            mint.rebuild(day, id);
+        } else {
+            mint.rebuild(day);
         }
         return Response.build();
     }
