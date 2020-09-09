@@ -3,6 +3,7 @@
 
 package com.adtiming.om.adc.service;
 
+import com.adtiming.om.adc.util.MapHelper;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,20 +15,27 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class BaseTask {
 
     private static final Logger LOG = LogManager.getLogger();
 
-    public void buildTask(JdbcTemplate jdbcTemplate, String[] days, int hour, int adnId, String adnName) {
+    public void buildTask(JdbcTemplate jdbcTemplateW, String[] days, int hour, int adnId, String adnName, int timeDimension) {
         LOG.info("[{}] build task start, days:{}", adnName, days);
         long start = System.currentTimeMillis();
         try {
+            String keyField = getKeyField(adnId);
+            Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
             String sql = "select * from report_adnetwork_account where adn_id=? and status=1" + getWhereSql(adnId);
-            jdbcTemplate.query(sql, rs -> {
-                Map<String, String> map = buildApiInfo(adnId, rs);
+            jdbcTemplateW.query(sql, rs -> {
+                Map<String, Object> map = buildApiInfo(adnId, rs);
+                int accountId = rs.getInt("id");
                 for (String day : days) {
-                    insertTask(jdbcTemplate, rs.getInt("id"), adnId, adnName, day, hour, map);
+                    String key = rs.getString(keyField) + "_" + day + "_" + hour;
+                    if (!taskMap.containsKey(key)) {
+                        insertTask(jdbcTemplateW, accountId, adnId, adnName, day, hour, map, timeDimension);
+                    }
                 }
             }, adnId);
         } catch (Exception e) {
@@ -36,22 +44,118 @@ public class BaseTask {
         LOG.info("[{}] build task end, days:{}, cost:{}", adnName, days, System.currentTimeMillis() - start);
     }
 
-    public void buildTaskById(JdbcTemplate jdbcTemplate, int accountId, String[] days, int hour, int adnId, String adnName) {
-        LOG.info("[{}] build task start, days:{}, accoutnId:{}", adnName, days, accountId);
+    public void buildTask(JdbcTemplate jdbcTemplateW, String[] days, int hour, int adnId, String adnName) {
+        LOG.info("[{}] build task start, days:{}", adnName, days);
         long start = System.currentTimeMillis();
         try {
-            String sql = "select * from report_adnetwork_account where adn_id=? and id=? and status=1" + getWhereSql(adnId);
-
-            jdbcTemplate.query(sql, rs -> {
-                Map<String, String> map = buildApiInfo(adnId, rs);
+            String keyField = getKeyField(adnId);
+            Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
+            String sql = "select * from report_adnetwork_account where adn_id=? and status=1" + getWhereSql(adnId);
+            jdbcTemplateW.query(sql, rs -> {
+                Map<String, Object> map = buildApiInfo(adnId, rs);
+                int accountId = rs.getInt("id");
                 for (String day : days) {
-                    insertTask(jdbcTemplate, accountId, adnId, adnName, day, hour, map);
+                    String key = rs.getString(keyField) + "_" + day + "_" + hour;
+                    if (!taskMap.containsKey(key)) {
+                        insertTask(jdbcTemplateW, accountId, adnId, adnName, day, hour, map, 1);
+                    }
                 }
-            }, adnId, accountId);
+            }, adnId);
         } catch (Exception e) {
             LOG.error("[{}] build task error", adnName, e);
         }
         LOG.info("[{}] build task end, days:{}, cost:{}", adnName, days, System.currentTimeMillis() - start);
+    }
+
+    protected void buildTaskById(JdbcTemplate jdbcTemplateW, int id, String[] days, int hour, int adnId, String adnName, int timeDimension) {
+        LOG.info("[{}] build task start, days:{}", adnName, days);
+        long start = System.currentTimeMillis();
+        try {
+            String keyField = getKeyField(adnId);
+            Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
+
+            String sql = "select * from report_adnetwork_account where adn_id=? and id=? and status=1" + getWhereSql(adnId);
+            jdbcTemplateW.query(sql, rs -> {
+                Map<String, Object> map = buildApiInfo(adnId, rs);
+                int accountId = 0;
+                if (adnId != 6) {
+                    accountId = rs.getInt("id");
+                }
+                for (String day : days) {
+                    String key = rs.getString(keyField) + "_" + day + "_" + hour;
+                    if (!taskMap.containsKey(key)) {
+                        insertTask(jdbcTemplateW, accountId, adnId, adnName, day, hour, map, timeDimension);
+                    }
+                }
+            }, adnId, id);
+        } catch (Exception e) {
+            LOG.error("[{}] build task error", adnName, e);
+        }
+        LOG.info("[{}] build task end, days:{}, cost:{}", adnName, days, System.currentTimeMillis() - start);
+    }
+
+    protected void buildTaskById(JdbcTemplate jdbcTemplateW, int id, String[] days, int hour, int adnId, String adnName) {
+        LOG.info("[{}] build task start, days:{}", adnName, days);
+        long start = System.currentTimeMillis();
+        try {
+            String keyField = getKeyField(adnId);
+            Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
+
+            String sql = "select * from report_adnetwork_account where adn_id=? and id=? and status=1" + getWhereSql(adnId);
+            jdbcTemplateW.query(sql, rs -> {
+                Map<String, Object> map = buildApiInfo(adnId, rs);
+                for (String day : days) {
+                    String key = rs.getString(keyField) + "_" + day + "_" + hour;
+                    if (!taskMap.containsKey(key)) {
+                        insertTask(jdbcTemplateW, rs.getInt("id"), adnId, adnName, day, hour, map, 1);
+                    }
+                }
+            }, adnId, id);
+        } catch (Exception e) {
+            LOG.error("[{}] build task error", adnName, e);
+        }
+        LOG.info("[{}] build task end, days:{}, cost:{}", adnName, days, System.currentTimeMillis() - start);
+    }
+
+    protected Map<String, Map<String, Object>> getFailedTask(JdbcTemplate jdbcTemplateW, String[] days, int hour, int adnId) {
+        String failedTaskSql = String.format("select distinct day,hour,adn_id,adn_app_id,adn_api_key,adn_app_token,user_id,user_signature from report_adnetwork_task where adn_id=? and status!=2 and day in ('%s') and hour=?", StringUtils.join(days, "','"));
+        String keyField = getKeyField(adnId);
+        Map<String, Map<String, Object>> taskMap = jdbcTemplateW.queryForList(failedTaskSql, adnId, hour).stream()
+                .collect(Collectors.toMap(o -> MapHelper.getString(o, keyField)
+                                + "_" + MapHelper.getString(o, "day")
+                                + "_" + MapHelper.getInt(o, "hour"),
+                        o -> o));
+        return taskMap;
+    }
+
+    private String getKeyField(int adnId) {
+        String keyField = "";
+        switch (adnId) {
+            case 2://admob
+            case 12://Chartboost
+            case 13://TikTok
+            case 15://IronSource
+                keyField = "user_id";
+                break;
+            case 3://facebook
+                keyField = "adn_app_id";
+                break;
+            case 7://AdColony
+            case 18:
+                keyField = "adn_app_token";
+                break;
+            case 4://Unity
+            case 5://Vungle
+            case 8://AppLovin
+            case 9://Mopub
+            case 11://Tapjoy
+            case 14://Mintegral
+                keyField = "adn_api_key";
+                break;
+            default:
+                break;
+        }
+        return keyField;
     }
 
     private String getWhereSql(int adnId) {
@@ -59,10 +163,11 @@ public class BaseTask {
         switch (adnId) {
             case 1://adtiming
             case 7://AdColony
+            case 18: //Mint
                 fileds = new String[]{"adn_app_token"};
                 break;
             case 2://admob
-                fileds = new String[]{"user_id", "adn_api_key", "adn_app_token", "credential_path"};
+                fileds = new String[]{"user_id", "adn_app_token"};
                 break;
             case 3://facebook
                 fileds = new String[]{"adn_app_id", "adn_app_token"};
@@ -73,7 +178,7 @@ public class BaseTask {
                 break;
             case 8://AppLovin
             case 9://Mopub
-                fileds = new String[]{"adn_app_id", "adn_api_key"};
+                fileds = new String[]{"adn_api_key"};
                 break;
             case 11://Tapjoy
                 fileds = new String[]{"adn_api_key", "adn_app_token"};
@@ -85,6 +190,9 @@ public class BaseTask {
             case 14://Mintegral
                 fileds = new String[]{"adn_api_key", "user_signature"};
                 break;
+            case 15://IronSource
+                fileds = new String[]{"user_id", "user_signature"};
+                break;
         }
         StringBuilder whereSql = new StringBuilder();
         for (String filed : fileds) {
@@ -93,69 +201,36 @@ public class BaseTask {
         return whereSql.toString();
     }
 
-    private Map<String, String> buildApiInfo(int adnId, ResultSet rs) throws SQLException {
-        Map<String, String> map = new HashMap<>();
-        switch (adnId) {
-            case 1://adtiming
-            case 7://AdColony
-                map.put("adn_app_token", rs.getString("adn_app_token"));
-                break;
-            case 2://admob
-                map.put("user_id", rs.getString("user_id"));
-                map.put("adn_api_key", rs.getString("adn_api_key"));
-                map.put("adn_app_token", rs.getString("adn_app_token"));
-                map.put("credential_path", rs.getString("credential_path"));
-                break;
-            case 3://facebook
-                map.put("adn_app_id", rs.getString("adn_app_id"));
-                map.put("adn_app_token", rs.getString("adn_app_token"));
-                break;
-            case 4://Unity
-            case 5://Vungle
-                map.put("adn_api_key", rs.getString("adn_api_key"));
-                break;
-            case 8://AppLovin
-            case 9://Mopub
-                map.put("adn_app_id", rs.getString("adn_app_id"));
-                map.put("adn_api_key", rs.getString("adn_api_key"));
-                break;
-            case 11://Tapjoy
-                map.put("adn_api_key", rs.getString("adn_api_key"));
-                map.put("adn_app_token", rs.getString("adn_app_token"));
-                break;
-            case 12://Chartboost
-            case 13://TikTok
-                map.put("user_id", rs.getString("user_id"));
-                map.put("user_signature", rs.getString("user_signature"));
-                break;
-            case 14://Mintegral
-                map.put("adn_api_key", rs.getString("adn_api_key"));
-                map.put("user_signature", rs.getString("user_signature"));
-                break;
-            case 15://IronSource
-                map.put("user_id", rs.getString("user_id"));
-                map.put("user_signature", rs.getString("user_signature"));
-                break;
-        }
+    private Map<String, Object> buildApiInfo(int adnId, ResultSet rs) throws SQLException {
+        Map<String, Object> map = new HashMap<>();
+        map.put("adn_app_id", rs.getString("adn_app_id"));
+        map.put("adn_api_key", rs.getString("adn_api_key"));
+        map.put("adn_app_token", rs.getString("adn_app_token"));
+        map.put("user_id", rs.getString("user_id"));
+        map.put("user_signature", rs.getString("user_signature"));
+        map.put("credential_path", rs.getString("credential_path"));
+        map.put("auth_type", rs.getInt("auth_type"));
+        map.put("currency", rs.getString("currency"));
         return map;
     }
 
-    private void insertTask(JdbcTemplate jdbcTemplate, int accountId, int adnId, String adnName, String day, int hour, Map<String, String> apiMap) {
+    private void insertTask(JdbcTemplate jdbcTemplateW, int accountId, int adnId, String adnName, String day, int hour, Map<String, Object> apiMap, int timeDimension) {
         try {
             List<String> symbols = new ArrayList<>();
-            Object[] obj = new Object[5 + apiMap.size()];
+            Object[] obj = new Object[6 + apiMap.size()];
             obj[0] = day;
             obj[1] = hour;
             obj[2] = accountId;
             obj[3] = adnId;
             obj[4] = 0;
-            String[] vals = apiMap.values().toArray(new String[0]);
+            obj[5] = timeDimension;
+            Object[] vals = apiMap.values().toArray(new Object[0]);
             for (int i = 0; i < apiMap.size(); i++) {
                 symbols.add("?");
-                obj[4 + i + 1] = vals[i];
+                obj[5 + i + 1] = vals[i];
             }
-            String insertSql = String.format("insert into report_adnetwork_task(day,hour,report_account_id,adn_id,status,%s)values(?,?,?,?,?,%s)", StringUtils.join(apiMap.keySet(), ","), StringUtils.join(symbols, ","));
-            jdbcTemplate.update(insertSql, obj);
+            String insertSql = String.format("insert into report_adnetwork_task(day,hour,report_account_id,adn_id,status,time_dimension,%s)values(?,?,?,?,?,?,%s)", StringUtils.join(apiMap.keySet(), ","), StringUtils.join(symbols, ","));
+            jdbcTemplateW.update(insertSql, obj);
         } catch (Exception e) {
             LOG.error("[{}] insertTask error", adnName, e);
         }

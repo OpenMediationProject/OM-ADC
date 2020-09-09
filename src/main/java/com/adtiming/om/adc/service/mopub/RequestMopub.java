@@ -28,7 +28,7 @@ public class RequestMopub extends BaseTask {
 
     private final int TIME_DELAY = -47;
 
-    @Scheduled(cron = "0 50 * * * ?")
+    @Scheduled(cron = "0 50 2 * * ?")
     public void buildCurrentTask() {
         if (!cfg.isProd())
             return;
@@ -40,7 +40,7 @@ public class RequestMopub extends BaseTask {
         LOG.info("[Mopub] buildCurrentTask End, cost:{}", System.currentTimeMillis() - start);
     }
 
-    @Scheduled(cron = "0 55 0 * * ?")
+    @Scheduled(cron = "0 55 2 * * ?")
     public void buildYesterdayTask() {
         if (!cfg.isProd())
             return;

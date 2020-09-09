@@ -76,23 +76,30 @@ public class DownloadMopub extends AdnBaseService {
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
+        task.step = 1;
         String file_path = downCsvFile(task.id, appKey, apiKey, day, err);
         if (StringUtils.isNotBlank(file_path) && err.length() == 0) {
+            task.step = 2;
             error = readCsvFile(file_path, day, appKey, apiKey);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = savePrepareReportData(task, day, appKey);
                 if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, appKey);
                 }
             }
         } else {
             error = err.toString();
         }
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && status != 2) {
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Mopub] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
         LOG.info("[Mopub] executeTaskImpl end, appKey:{}, apiKey:{}, day:{}, cost:{}", appKey, apiKey, day, System.currentTimeMillis() - start);
     }
 
@@ -209,9 +216,7 @@ public class DownloadMopub extends AdnBaseService {
         long start = System.currentTimeMillis();
         String error;
         try {
-            String whereSql = String.format("b.adn_app_key='%s'", appKey);
-            String changeSql = String.format("(b.adn_app_key='%s' or b.new_account_key='%s')", appKey, appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
@@ -222,8 +227,8 @@ public class DownloadMopub extends AdnBaseService {
                         MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
             }
 
-            String dataSql = "select day,country,platform,adunit_id data_key,sum(requests) AS api_request,sum(impressions) AS impressions," +
-                    "sum(clicks) AS clicks,sum(revenue) AS revenue " +
+            String dataSql = "select day,country,platform,adunit_id data_key,sum(requests) AS api_request,sum(impressions) AS api_impr," +
+                    "sum(clicks) AS api_click,sum(revenue) AS revenue " +
                     "  from report_mopub where day=? and app_key=? group by day,country,adunit_id" +
                     " order by adunit_id";
 

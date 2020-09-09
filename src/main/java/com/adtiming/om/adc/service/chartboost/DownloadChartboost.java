@@ -77,13 +77,7 @@ public class DownloadChartboost extends AdnBaseService {
         LOG.info("[Chartboost] download start, userId:{},date:{}, timeZone:{}", userId, date, cal.getTimeZone().toZoneId().getId());
         long start = System.currentTimeMillis();
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
-        //临时去掉部分app数据拉取
-        //and adt_publisher_app_id not in (1370,1614,1702,1759,2240,2267,2292))
-        /*String instanceSql = "select placement_key from om_instance where LENGTH(placement_key)>0 " +
-                "and pub_app_id in (select pub_app_id from om_adnetwork_app where api_key=?)  and adn_id=12";*/
-        String whereSql = String.format("b.api_key='%s'", userId);
-        String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s'", userId, userId);
-        List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+        List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
         Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
         List<Map<String, Object>> oldInstance = getOldInstanceList(insIds);
@@ -92,6 +86,7 @@ public class DownloadChartboost extends AdnBaseService {
         }
         String error;
         //List<String> data = jdbcTemplate.queryForList(instanceSql, String.class, userId);
+        task.step = 1;
         if (!instanceInfoList.isEmpty()) {
             List<Boolean> bl = new ArrayList<>();
             for (Map<String, Object> ins : instanceInfoList) {
@@ -99,29 +94,36 @@ public class DownloadChartboost extends AdnBaseService {
                 if (StringUtils.isBlank(placementKey))
                     continue;
                 StringBuilder sb = new StringBuilder();
+                task.step = 1;
                 String jsonData = downJsonData(userId, userSignature, date, date, placementKey, sb);
                 if (StringUtils.isNoneBlank(jsonData) && sb.length() == 0) {//request error
+                    task.step = 2;
                     String err = jsonDataImportDatabase(jsonData, date, userId, placementKey);
                     boolean flag = StringUtils.isBlank(err) || "data is null".equals(err);
                     bl.add(flag);
                 }
             }
             if (bl.size() == instanceInfoList.size()) {
+                task.step = 3;
                 error = savePrepareReportData(task, date, userId);
                 if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, userId);
                 }
             } else {
                 error = "downJsonData failed";
             }
         } else {
-            error = "placement_key is empty";
+            error = "instance is null";
         }
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && task.runCount % 5 == 0 && status != 2) {
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Chartboost] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
         LOG.info("[Chartboost] download finished, userId:{},date:{},cost:{}", userId, date, System.currentTimeMillis() - start);
     }
 
@@ -241,9 +243,7 @@ public class DownloadChartboost extends AdnBaseService {
         LOG.info("[Chartboost] savePrepareReportData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         try {
-            String whereSql = String.format("b.api_key='%s'", userId);
-            String changeSql = String.format("(b.api_key='%s' or b.new_account_key='%s'", userId, userId);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

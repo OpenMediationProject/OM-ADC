@@ -39,7 +39,7 @@ public class RequestUnity extends BaseTask {
         int hour = NumberUtils.toInt(DateTimeFormat.HOUR_FORMAT.format(date));
         LOG.info("[Unity] buildCurrentTask Run Start, day:{},hour:{}", day, hour);
         long start = System.currentTimeMillis();
-        rebuild(day, hour);
+        buildTask(jdbcTemplate, day, 0, 4, "Unity", 1);
         LOG.info("[Unity] buildCurrentTask Run End, day:{},hour:{},cost;{}", day, hour, System.currentTimeMillis() - start);
     }
 
@@ -51,25 +51,23 @@ public class RequestUnity extends BaseTask {
         LOG.info("[Unity] buildYesterdayTask Start");
         long start = System.currentTimeMillis();
         String[] day = new String[] {LocalDateTime.now().plusHours(TIME_DELAY).plusDays(-1).format(DateTimeFormat.DAY_FORMAT)};
-        for (int i = 0; i < 24; i++) {
-            rebuild(day, i);
-        }
+        buildTask(jdbcTemplate, day, 0, 4, "Unity", 1);
         LOG.info("[Unity] buildYesterdayTask End, cost:{}", System.currentTimeMillis() - start);
     }
 
-    public void rebuild(String[] day, int hour) {
+    public void rebuild(String[] day, int hour, int timeDimension) {
         try {
-            buildTask(jdbcTemplate, day, hour, 4, "Unity");
+            buildTask(jdbcTemplate, day, hour, 4, "Unity", timeDimension);
         } catch (Exception e) {
-            LOG.error("[Unity] build task error", e);
+            LOG.error("[TikTok] build task error", e);
         }
     }
 
-    public void rebuild(String[] day, int hour, int id) {
+    public void rebuild(String[] day, int hour, int id, int timeDimension) {
         try {
-            buildTaskById(jdbcTemplate, id, day, hour, 4, "Unity");
+            buildTaskById(jdbcTemplate, id, day, hour, 4, "Unity", timeDimension);
         } catch (Exception e) {
-            LOG.error("[Unity] build task error", e);
+            LOG.error("[TikTok] build task error", e);
         }
     }
 }
