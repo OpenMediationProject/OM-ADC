@@ -30,6 +30,12 @@ public class AppConfig {
     @Value("${auth.domain}")
     public String authDomain;
 
+    @Value("${admob.client_id}")
+    public String adtClientId;
+
+    @Value("${admob.client_secret}")
+    public String adtClientSecret;
+
     @PostConstruct
     private void init() {
         if (StringUtils.isNotBlank(httpProxyStr)) {

@@ -18,6 +18,8 @@ public class ReportAccount {
     public String userSignature;
     public String credentialPath;
     public String authKey; // admob证书重定向URL中唯一主键
+    public int authType;
+    public String reason;
 
     public int getId() {
         return id;
@@ -97,5 +99,21 @@ public class ReportAccount {
 
     public void setAuthKey(String authKey) {
         this.authKey = authKey;
+    }
+
+    public int getAuthType() {
+        return authType;
+    }
+
+    public void setAuthType(int authType) {
+        this.authType = authType;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
     }
 }

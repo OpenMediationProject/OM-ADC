@@ -69,23 +69,30 @@ public class DownloadVungle extends AdnBaseService {
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
-        String json_data = downJsonData(task.id, appKey, day, err);
-        if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
-            error = jsonDataImportDatabase(json_data, day, appKey);
+        task.step = 1;
+        String jsonData = downJsonData(task.id, appKey, day, err);
+        if (StringUtils.isNotBlank(jsonData) && err.length() == 0) {
+            task.step = 2;
+            error = jsonDataImportDatabase(jsonData, day, appKey);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = savePrepareReportData(task, day, appKey);
                 if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, appKey);
                 }
             }
         } else {
             error = err.toString();
         }
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && status != 2) {
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Vungle] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
         LOG.info("[Vungle] executeTaskImpl end, authKey:{}, day:{}, cost:{}", appKey, day, System.currentTimeMillis() - start);
     }
 
@@ -179,9 +186,7 @@ public class DownloadVungle extends AdnBaseService {
         LOG.info("[Vungle] savePrepareReportData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         try {
-            String whereSql = String.format("b.report_app_id='%s'", appKey);
-            String changeSql = String.format("(b.report_app_id='%s' or b.new_account_key='%s')", appKey, appKey);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

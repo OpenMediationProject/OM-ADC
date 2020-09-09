@@ -68,6 +68,7 @@ public class DownloadFacebook extends AdnBaseService {
         try {
             //改任务状态
             updateTaskStatus(jdbcTemplate, task.id, 1, "start");//start
+            task.step = 1;
             JSONArray results = requestFBApi(task);
             if (results == null) {
                 LOG.warn("[facebook] download report response [data->results] is null, task:{}", JSONObject.toJSONString(task));
@@ -130,18 +131,24 @@ public class DownloadFacebook extends AdnBaseService {
                 setDataRow(insertObj, metric, value);
                 insertMap.put(key, insertObj);
             }
+            task.step = 2;
             String error = saveData(insertMap, task);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = savePrepareReportData(task, task.day, task.adnAppId);
                 if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, task.adnAppId);
                 }
             }
-            int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+            int status = getStatus(error);
+            error = convertMsg(error);
             if (task.runCount > 5 && task.runCount % 5 == 0 && status != 2) {
+                updateAccountException(jdbcTemplate, task, error);
                 LOG.error("[facebook] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+            } else {
+                updateTaskStatus(jdbcTemplate, task.id, status, error);
             }
-            updateTaskStatus(jdbcTemplate, task.id, status, error);
 
         } catch (Exception e) {
             updateTaskStatus(jdbcTemplate, task.id, 3, e.getMessage());
@@ -157,7 +164,7 @@ public class DownloadFacebook extends AdnBaseService {
             reqUrl = String.format(url, task.adnAppId, task.queryId, task.adnAppToken);
         }
         JSONArray results = getResultsData(reqUrl);
-        if (results == null) {//数据准备好或者token失效,重新生产拉取任务
+        if (results == null) {
             String go = String.format(getQueryIdUrl, task.adnAppId, task.day, task.day, columns, breakdowns, task.adnAppToken);
             String queryIdResp = Http.post(go, 60000, cfg.httpProxy);
             if (StringUtils.isNoneBlank(queryIdResp)) {
@@ -323,9 +330,7 @@ public class DownloadFacebook extends AdnBaseService {
         LOG.info("[facebook] savePrepareReportData start, taskId:{}", task.id);
         String error;
         try {
-            String whereSql = String.format("b.adn_app_key='%s'", appId);
-            String changeSql = String.format("(b.adn_app_key='%s' or b.new_account_key='%s')", appId, appId);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed

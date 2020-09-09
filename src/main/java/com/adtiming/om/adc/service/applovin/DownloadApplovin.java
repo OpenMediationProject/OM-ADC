@@ -75,31 +75,37 @@ public class DownloadApplovin extends AdnBaseService {
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
-        String json_data = downJsonData(task.id, appId, apiKey, day, err);
+        task.step = 1;
+        String json_data = downJsonData(task, appId, apiKey, day, err);
         if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
+            task.step = 2;
             error = jsonDataImportDatabase(json_data, day, appId, apiKey);
             if (StringUtils.isBlank(error)) {
+                task.step = 3;
                 error = savePrepareReportData(task, day, appId);
-                if (StringUtils.isBlank(error))
+                if (StringUtils.isBlank(error)) {
+                    task.step = 4;
                     error = reportLinkedToStat(task, appId);
+                }
             }
         } else {
             error = err.toString();
         }
-        int status = StringUtils.isBlank(error) || "data is null".equals(error) ? 2 : 3;
+        int status = getStatus(error);
+        error = convertMsg(error);
         if (task.runCount > 5 && status != 2) {
+            updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Applovin] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
+        } else {
+            updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        updateTaskStatus(jdbcTemplate, task.id, status, error);
-
         LOG.info("[Applovin] executeTaskImpl end, appId:{}, apiKey:{}, day:{}, cost:{}", appId, apiKey, day, System.currentTimeMillis() - start);
     }
 
-    private String downJsonData(int taskId, String appId, String apiKey, String day, StringBuilder err) {
-        String url = "https://r.applovin.com/report?api_key=" + apiKey + "&columns=day%2Chour%2Cimpressions%2Cclicks%2Cctr%2Crevenue" +
-                "%2Cecpm%2Ccountry%2Cad_type%2Csize%2Cdevice_type%2Cplatform%2Capplication%2Cpackage_name%2Cplacement" +
-                "%2Capplication_is_hidden%2Czone%2Czone_id" +
-                "&format=json&start=" + day + "&end=" + day;
+    private String downJsonData(ReportTask task, String appId, String apiKey, String day, StringBuilder err) {
+        int taskId = task.id;
+        String url = String.format("https://r.applovin.com/report?api_key=%s&columns=%s,impressions,clicks,ctr,revenue,ecpm,country,ad_type,size,device_type,platform,application,package_name,placement,application_is_hidden,zone,zone_id&format=json&start=%s&end=%s",
+                apiKey, task.timeDimension == 0 ? "day,hour" : "day", day, day);
         String jsonData = "";
         HttpEntity entity = null;
         LOG.info("[Applovin] downJsonData start, taskId:{}, appId:{}, apiKey:{}, day:{}", taskId, appId, apiKey, day);
@@ -155,8 +161,12 @@ public class DownloadApplovin extends AdnBaseService {
             JSONArray jsonArray = JSONArray.parseArray(jobj.getString("results"));
             for (int i = 0; i < jsonArray.size(); i++) {
                 JSONObject obj = jsonArray.getJSONObject(i);
+                String hour = MapHelper.getString(obj, "hour");
+                if (StringUtils.isBlank(hour)) {
+                    hour = "00:00";
+                }
                 count++;
-                Object[] params = new Object[]{obj.get("day"), obj.get("hour"), obj.get("country"), obj.get("platform"), obj.get("application"),
+                Object[] params = new Object[]{obj.get("day"), hour, obj.get("country"), obj.get("platform"), obj.get("application"),
                         obj.get("package_name"), obj.get("placement"), obj.get("ad_type"), obj.get("device_type"), obj.get("application_is_hidden"),
                         obj.get("zone"), obj.get("zone_id"), obj.get("size"), obj.get("impressions"), obj.get("clicks"),
                         obj.get("ctr") == null ? 0 : obj.get("ctr"), obj.get("revenue") == null ? 0 : obj.get("revenue"),
@@ -183,14 +193,10 @@ public class DownloadApplovin extends AdnBaseService {
         long start = System.currentTimeMillis();
         String error;
         try {
-            String whereSql = String.format("b.adn_app_key='%s'", appId);
-            String changeSql = String.format("(b.adn_app_key='%s' or b.new_account_key='%s')", appId, appId);
-            List<Map<String, Object>> instanceInfoList = getInstanceList(whereSql, changeSql);
+            List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
             Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
-            placements.putAll(instanceInfoList.stream().collect(Collectors.toMap(m ->
-                    MapHelper.getString(m, "app_id"), m -> m, (existingValue, newValue) -> existingValue)));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o-> getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -198,12 +204,10 @@ public class DownloadApplovin extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
-                placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
-                        MapHelper.getString(m, "app_id"), m -> m, (existingValue, newValue) -> existingValue)));
             }
 
-            String dataSql = "select day,left(hour,2) hour,country,platform," +
-                    "case when zone_id is null or zone_id='' then package_name else  zone_id end data_key," +
+            String dataSql = "select day,left(ifnull(hour,0),2) hour,country,platform,zone_id data_key," +
+                    //"case when zone_id is null or zone_id='' then package_name else  zone_id end data_key," +
                     "sum(impressions) AS api_impr,sum(clicks) AS api_click,sum(revenue) AS revenue" +
                     " from report_applovin where day=? and sdkKey=? " +
                     " group by hour,day,country,package_name,zone_id ";

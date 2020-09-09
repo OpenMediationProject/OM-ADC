@@ -68,42 +68,59 @@ do
         continue
     fi
     if [[ $env_var =~ ^OMYML_ ]]; then
-        item_name=$(echo "$env_var" | cut -d_ -f2- | tr '[:upper:]' '[:lower:]' | tr _ -)
+        item_name=$(echo "$env_var" | cut -d_ -f2- | tr '[:upper:]' '[:lower:]')
         if [[ ${item_name} = "dbaddress" ]];then
-            loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "/url/s/127.0.0.1/${!env_var}/g" ${CONFILE}/application-loc.yml
+            loginfo_note "[Configuring] ${item_name} in ${CONFFILE}/application-loc.yml"
+            sed -i "/url/s@//\(.*\)/@//${!env_var}/@g" ${CONFFILE}/application-loc.yml
             continue
         fi
         if [[ ${item_name} = "dbname" ]];then
-            loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "/url/s/open_mediation/${!env_var}/g" ${CONFILE}/application-loc.yml
+            loginfo_note "[Configuring] ${item_name} in ${CONFFILE}/application-loc.yml"
+            sed -i "/url/s/open_mediation/${!env_var}/g" ${CONFFILE}/application-loc.yml
             continue
         fi
         if [[ ${item_name} = "dsserverdomain" ]];then
-            loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "/domain/s@domain:.*@domain: ${!env_var}@g" ${CONFILE}/application-loc.yml
+            loginfo_note "[Configuring] ${item_name} in ${CONFFILE}/application-loc.yml"
+            sed -i "/domain/s@domain:.*@domain: ${!env_var}@g" ${CONFFILE}/application-loc.yml
             continue
         fi
         if [[ ${item_name} = "httpproxy" ]];then
-            loginfo_note "[Configuring] ${item_name} in ${CONFILE}/application-loc.yml"
-            sed -i "s@^http.proxy:.*@http.proxy: ${!env_var}@g" ${CONFILE}/application-loc.yml
+            loginfo_note "[Configuring] ${item_name} in ${CONFFILE}/application-loc.yml"
+            sed -i "s@^http.proxy:.*@http.proxy: ${!env_var}@g" ${CONFFILE}/application-loc.yml
             continue
         fi
-        updateymlConfig "$item_name" "${!env_var}" "${CONFILE}/application-loc.yml"
+        updateymlConfig "$item_name" "${!env_var}" "${CONFFILE}/application-loc.yml"
+    fi
+
+    if [[ $env_var =~ ^OMADC_ ]]; then
+        item_name=$(echo "$env_var" | cut -d_ -f2- | tr '[:upper:]' '[:lower:]' )
+        if [[ ${item_name} = "mountpath" ]]; then
+            loginfo_note "[Cloud Storage] Link ${!env_var}/${CONFFILE}/download to /${CONFFILE}/download"
+            if [[ -d /${CONFFILE}/download ]];then
+                rm -fr /${CONFFILE}/download
+            fi
+            ln -sf ${!env_var}/${CONFFILE}/download  /${CONFFILE}/download
+            loginfo_note "[Cloud Storage] Link ${!env_var}/${CONFFILE}/log to /${CONFFILE}/log"
+            if [[ -d /${CONFFILE}/log ]];then
+                rm -fr /${CONFFILE}/log
+            fi
+            ln -sf ${!env_var}/${CONFFILE}/log  /${CONFFILE}/log
+            continue
+        fi 
     fi
     if [[ $env_var =~ ^OMCONF_ ]]; then
         item_name=$(echo "$env_var" | cut -d_ -f2-)
         if [[ ${item_name} = "JAVA_OPTS" ]]; then
-            loginfo_note "[Configuring] ${item_name} in ${CONFILE}/${CONFILE}.conf"
+            loginfo_note "[Configuring] ${item_name} in ${CONFFILE}/${CONFFILE}.conf"
             loginfo_note "ADD JAVA_OPTS [ ${!env_var} ] to Runtime"
 	    JAVA_OPTS="$(sed -n 's/JAVA_OPTS="\(.*\)"/\1/p' ${CONFFILE}/${CONFFILE}.conf) ${!env_var}"
-            sed -i "s/JAVA_OPTS=.*/JAVA_OPTS=\"${JAVA_OPTS}\"/g" ${CONFILE}/${CONFILE}.conf
+            sed -i "s/JAVA_OPTS=.*/JAVA_OPTS=\"${JAVA_OPTS}\"/g" ${CONFFILE}/${CONFFILE}.conf
             continue
-        fi
+        fi 
         if [[ ${item_name} = "RUN_ARGS" ]]; then
-            loginfo_note "[Configuring] ${item_name} in ${CONFILE}/${CONFILE}.conf"
+            loginfo_note "[Configuring] ${item_name} in ${CONFFILE}/${CONFFILE}.conf"
             RUN_ARGS="${!env_var}"
-            sed -i "s/RUN_ARGS=.*/RUN_ARGS=\"--spring.profiles.active=${RUN_ARGS}\"/g" ${CONFILE}/${CONFILE}.conf
+            sed -i "s/RUN_ARGS=.*/RUN_ARGS=\"--spring.profiles.active=${RUN_ARGS}\"/g" ${CONFFILE}/${CONFFILE}.conf
             continue
         fi
         updateConfig "$item_name" "${!env_var}" "${CONFFILE}/${CONFFILE}.conf"
@@ -125,7 +142,7 @@ MODE=service
 APP_NAME=${CONFILE}
 JAVA_HOME=/usr/local/java/jdk
 JAVA_OPTS="-Dapp=\$APP_NAME\
- -Duser.timezone=GMT+08\
+ -Duser.timezone=UTC\
  -Xmx${OMJAVA_MAX_MEM}\
  -Xms${OMJAVA_MAX_MEM}\
  -server"
