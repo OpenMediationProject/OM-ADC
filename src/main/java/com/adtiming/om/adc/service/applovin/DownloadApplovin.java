@@ -60,32 +60,31 @@ public class DownloadApplovin extends AdnBaseService {
     }
 
     private void executeApplovinTask(ReportTask task) {
-        String appId = task.adnAppId;
         String apiKey = task.adnApiKey;
         String day = task.day;
         // Set up AdSense Management API client.
-        if (StringUtils.isBlank(appId)) {
-            LOG.error("Applovin，appKey is null");
+        if (StringUtils.isBlank(apiKey)) {
+            LOG.error("Applovin，apiKey is null");
             return;
         }
 
 
-        LOG.info("[Applovin] executeTaskImpl start, appId:{}, apiKey:{}, day:{}", appId, apiKey, day);
+        LOG.info("[Applovin] executeTaskImpl start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
         task.step = 1;
-        String json_data = downJsonData(task, appId, apiKey, day, err);
+        String json_data = downJsonData(task, apiKey, day, err);
         if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
             task.step = 2;
-            error = jsonDataImportDatabase(json_data, day, appId, apiKey);
+            error = jsonDataImportDatabase(task, json_data, day, apiKey);
             if (StringUtils.isBlank(error)) {
                 task.step = 3;
-                error = savePrepareReportData(task, day, appId);
+                error = savePrepareReportData(task, day, apiKey);
                 if (StringUtils.isBlank(error)) {
                     task.step = 4;
-                    error = reportLinkedToStat(task, appId);
+                    error = reportLinkedToStat(task, apiKey);
                 }
             }
         } else {
@@ -99,17 +98,16 @@ public class DownloadApplovin extends AdnBaseService {
         } else {
             updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        LOG.info("[Applovin] executeTaskImpl end, appId:{}, apiKey:{}, day:{}, cost:{}", appId, apiKey, day, System.currentTimeMillis() - start);
+        LOG.info("[Applovin] executeTaskImpl end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
     }
 
-    private String downJsonData(ReportTask task, String appId, String apiKey, String day, StringBuilder err) {
+    private String downJsonData(ReportTask task, String apiKey, String day, StringBuilder err) {
         int taskId = task.id;
         String url = String.format("https://r.applovin.com/report?api_key=%s&columns=%s,impressions,clicks,ctr,revenue,ecpm,country,ad_type,size,device_type,platform,application,package_name,placement,application_is_hidden,zone,zone_id&format=json&start=%s&end=%s",
                 apiKey, task.timeDimension == 0 ? "day,hour" : "day", day, day);
         String jsonData = "";
         HttpEntity entity = null;
-        LOG.info("[Applovin] downJsonData start, taskId:{}, appId:{}, apiKey:{}, day:{}", taskId, appId, apiKey, day);
-        LOG.info("[Applovin] request url:{}", url);
+        LOG.info("[Applovin] downJsonData start, taskId:{}", taskId);
         long start = System.currentTimeMillis();
         try {
             updateReqUrl(jdbcTemplate, taskId, url);
@@ -134,18 +132,18 @@ public class DownloadApplovin extends AdnBaseService {
         } finally {
             EntityUtils.consumeQuietly(entity);
         }
-        LOG.info("[Applovin] downJsonData end, taskId:{}, appId:{}, apiKey:{}, day:{}, cost:{}", taskId, appId, apiKey, day, System.currentTimeMillis() - start);
+        LOG.info("[Applovin] downJsonData end, taskId:{}, cost:{}", taskId, System.currentTimeMillis() - start);
         return jsonData;
     }
 
-    private String jsonDataImportDatabase(String jsonData, String day, String appId, String apiKey) {
+    private String jsonDataImportDatabase(ReportTask task, String jsonData, String day, String apiKey) {
         try {
             String deleteSql = "DELETE FROM report_applovin WHERE day=? AND sdkKey=?";
-            jdbcTemplate.update(deleteSql, day, appId);
+            jdbcTemplate.update(deleteSql, day, apiKey);
         } catch (Exception e) {
             return String.format("delete report_applovin error,msg:%s", e.getMessage());
         }
-        LOG.info("[Applovin] jsonDataImportDatabase start, appId:{}, apiKey:{}, day:{}", appId, apiKey, day);
+        LOG.info("[Applovin] jsonDataImportDatabase start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         String error = "";
         String insertSql = "INSERT INTO report_applovin (day,hour,country,platform,application,package_name,placement," +
@@ -170,7 +168,7 @@ public class DownloadApplovin extends AdnBaseService {
                         obj.get("package_name"), obj.get("placement"), obj.get("ad_type"), obj.get("device_type"), obj.get("application_is_hidden"),
                         obj.get("zone"), obj.get("zone_id"), obj.get("size"), obj.get("impressions"), obj.get("clicks"),
                         obj.get("ctr") == null ? 0 : obj.get("ctr"), obj.get("revenue") == null ? 0 : obj.get("revenue"),
-                        obj.get("ecpm") == null ? 0 : obj.get("ecpm"), appId};
+                        obj.get("ecpm") == null ? 0 : obj.get("ecpm"), apiKey};
                 if (count > 1000) {
                     jdbcTemplate.batchUpdate(insertSql, lsParm);
                     count = 1;
@@ -184,7 +182,7 @@ public class DownloadApplovin extends AdnBaseService {
         } catch (Exception e) {
             error = String.format("insert report_applovin error, msg:%s", e.getMessage());
         }
-        LOG.info("[Applovin] jsonDataImportDatabase end, appId:{}, apiKey:{}, day:{}, cost:{}", appId, apiKey, day, System.currentTimeMillis() - start);
+        LOG.info("[Applovin] jsonDataImportDatabase end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
         return error;
     }
 

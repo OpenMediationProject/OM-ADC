@@ -186,6 +186,7 @@ public class BaseTask {
                 break;
             case 12://Chartboost
             case 13://TikTok
+            case 17://helium
                 fileds = new String[]{"user_id", "user_signature"};
                 break;
             case 14://Mintegral
