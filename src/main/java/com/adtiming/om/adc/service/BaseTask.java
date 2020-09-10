@@ -27,7 +27,7 @@ public class BaseTask {
         try {
             String keyField = getKeyField(adnId);
             Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
-            String sql = "select * from report_adnetwork_account where adn_id=? and status=1" + getWhereSql(adnId);
+            String sql = "select * from report_adnetwork_account where adn_id=? and status in (-1,1)" + getWhereSql(adnId);
             jdbcTemplateW.query(sql, rs -> {
                 Map<String, Object> map = buildApiInfo(adnId, rs);
                 int accountId = rs.getInt("id");
@@ -50,7 +50,7 @@ public class BaseTask {
         try {
             String keyField = getKeyField(adnId);
             Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
-            String sql = "select * from report_adnetwork_account where adn_id=? and status=1" + getWhereSql(adnId);
+            String sql = "select * from report_adnetwork_account where adn_id=? and status in (-1,1)" + getWhereSql(adnId);
             jdbcTemplateW.query(sql, rs -> {
                 Map<String, Object> map = buildApiInfo(adnId, rs);
                 int accountId = rs.getInt("id");
@@ -74,7 +74,7 @@ public class BaseTask {
             String keyField = getKeyField(adnId);
             Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
 
-            String sql = "select * from report_adnetwork_account where adn_id=? and id=? and status=1" + getWhereSql(adnId);
+            String sql = "select * from report_adnetwork_account where adn_id=? and id=? and status in (-1,1)" + getWhereSql(adnId);
             jdbcTemplateW.query(sql, rs -> {
                 Map<String, Object> map = buildApiInfo(adnId, rs);
                 int accountId = 0;
@@ -101,7 +101,7 @@ public class BaseTask {
             String keyField = getKeyField(adnId);
             Map<String, Map<String, Object>> taskMap = getFailedTask(jdbcTemplateW, days, hour, adnId);
 
-            String sql = "select * from report_adnetwork_account where adn_id=? and id=? and status=1" + getWhereSql(adnId);
+            String sql = "select * from report_adnetwork_account where adn_id=? and id=? and status in (-1,1)" + getWhereSql(adnId);
             jdbcTemplateW.query(sql, rs -> {
                 Map<String, Object> map = buildApiInfo(adnId, rs);
                 for (String day : days) {
