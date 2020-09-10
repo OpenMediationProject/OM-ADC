@@ -6,12 +6,12 @@ import com.adtiming.om.adc.dto.ReportAdnData;
 import com.adtiming.om.adc.dto.ReportTask;
 import com.adtiming.om.adc.service.AdnBaseService;
 import com.adtiming.om.adc.service.AppConfig;
-import com.adtiming.om.adc.util.Base64;
 import com.adtiming.om.adc.util.MapHelper;
 import com.adtiming.om.adc.util.MyHttpClient;
 import com.adtiming.om.adc.util.Util;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 @Service
 public class DownloadIronSource extends AdnBaseService {
@@ -106,7 +108,7 @@ public class DownloadIronSource extends AdnBaseService {
         LOG.info("[IcronSource] downJsonData start, taskId:{}", taskId);
         long start = System.currentTimeMillis();
         try {
-            String token = Base64.encode(username + ":" + secretKey);
+            String token = Base64.encodeBase64String((username + ":" + secretKey).getBytes(UTF_8));
             String reportUrl = String.format(REPORT_URL, day, day);
             updateReqUrl(jdbcTemplate, taskId, reportUrl);
             HttpGet httpGet = new HttpGet(reportUrl);
