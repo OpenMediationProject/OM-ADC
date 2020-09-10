@@ -31,7 +31,7 @@ public abstract class AdnBaseService {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
-    private final BlockingQueue<ReportTask> taskQueue = new LinkedBlockingQueue<>(100);
+    private BlockingQueue<ReportTask> taskQueue;
 
     @Resource
     private ThreadPoolTaskExecutor executor;
@@ -39,9 +39,12 @@ public abstract class AdnBaseService {
     protected int adnId;
     protected String adnName;
 
+    protected int maxTaskCount = 100;
+
     @PostConstruct
     public void init() {
         setAdnInfo();
+        taskQueue = new LinkedBlockingQueue<>(maxTaskCount);
         refreshReportAPIError();
         putTaskToQueue(1);
         run();
@@ -49,7 +52,7 @@ public abstract class AdnBaseService {
 
     private final Set<Integer> executeTask = new HashSet<>();
 
-    private List<ReportApiError> apiErrorList = Collections.EMPTY_LIST;
+    private List<ReportApiError> apiErrorList;
 
     @Scheduled(cron = "0 */5 * * * ?")
     private void refreshReportAPIError() {
@@ -87,10 +90,10 @@ public abstract class AdnBaseService {
         long start = System.currentTimeMillis();
         final int[] count = {0};
         try {
-            String sql = String.format("select * from report_adnetwork_task where adn_id=%d and status=%d order by id limit 100", adnId, status);
+            String sql = String.format("select * from report_adnetwork_task where adn_id=%d and status=%d order by id limit %d", adnId, status, maxTaskCount);
             List<ReportTask> taskList = jdbcTemplate.query(sql, ReportTask.ROWMAPPER);
             if (!taskList.isEmpty()) {
-                int maxAllowedSize = 100 - taskQueue.size();
+                int maxAllowedSize = maxTaskCount - taskQueue.size();
                 if (taskList.size() < maxAllowedSize) {
                     maxAllowedSize = taskList.size();
                 }
@@ -117,20 +120,26 @@ public abstract class AdnBaseService {
             LOG.info("[{}] runTask start,count:{}", adnName, taskQueue.size());
             long start = System.currentTimeMillis();
             int count = taskQueue.size();
-            //FB 一分钟内只允许50个查询，You can have at most 50 queries per minute
-            if (adnId == 2 && count > 50) {
-                count = 50;
+            if (count > maxTaskCount) {
+                count = maxTaskCount;
             }
-            CountDownLatch cd = new CountDownLatch(count);
-            for (int i = 0; i < count; i++) {
-                ReportTask o = taskQueue.poll();
-                executor.execute(() -> {
+            if (adnId == 9 || adnId == 15) {//Mopub、IronSource顺序执行
+                for (int i = 0; i < count; i++) {
+                    ReportTask o = taskQueue.poll();
                     executeTask(o);
-                    cd.countDown();
-                });
+                }
+            } else {
+                CountDownLatch cd = new CountDownLatch(count);
+                for (int i = 0; i < count; i++) {
+                    ReportTask o = taskQueue.poll();
+                    executor.execute(() -> {
+                        executeTask(o);
+                        cd.countDown();
+                    });
+                }
+                //60 minutes timeout
+                cd.await(60, TimeUnit.MINUTES);
             }
-            //60分钟超时时间
-            cd.await(60, TimeUnit.MINUTES);
             LOG.info("[{}] runTask finished,count:{}, cost:{}", adnName, count, System.currentTimeMillis() - start);
         } catch (Exception e) {
             LOG.error("[{}] runTask error", adnName, e);
@@ -166,28 +175,28 @@ public abstract class AdnBaseService {
         try {
             String reason;
             int step = task.step;
-            if (step == 1) {//API接口拉取
+            if (step == 1) {//API interface request
                 reason = msg;
                 ReportApiError apiError = matchApiError(msg);
                 if (apiError != null) {
-                    if (!apiError.isIgnore()) {//非忽略错误,更新账号状态为Exception
+                    if (!apiError.isIgnore()) {//Non-ignore error, update account status to Exception
                         jdbcTemplateW.update("UPDATE report_adnetwork_account SET status=2,reason=?,error_id=? WHERE id=?", reason, apiError.id, task.reportAccountId);
-                    } else {//发生忽略错误告警,只更新reason和error_id
+                    } else {//An ignore error alert occurs and only the Reason and error_ID are updated
                         jdbcTemplateW.update("UPDATE report_adnetwork_account SET reason=?,error_id=? WHERE id=?", reason, apiError.id, task.reportAccountId);
                         LOG.error("{} ignore error has occurred,report_account_id:{},error:{}", adnName, task.reportAccountId, reason);
                     }
                 } else {
                     long errorId = JdbcHelper.insertReturnId(jdbcTemplateW,"insert into report_adnetwork_error(adn_id,content)values(?,?)", adnId, reason);
-                    //出现新错误告警
+                    //New error warning
                     jdbcTemplateW.update("UPDATE report_adnetwork_account SET reason=?,error_id=? WHERE id=?", reason, errorId, task.reportAccountId);
                     LOG.error("{} add new error info,report_account_id:{},error:{}", adnName, task.reportAccountId, reason);
                 }
-            } else {//内部错误告警
-                if (step == 2) {//数据入库异常
+            } else {//Internal error
+                if (step == 2) {
                     reason = "Raw data inserted into database error.";
-                } else if (step == 3) {//数据关联异常
+                } else if (step == 3) {
                     reason = "Data association error.";
-                } else if (step == 4) {//数据汇总异常
+                } else if (step == 4) {
                     reason = "Data aggregation error.";
                 } else {
                     reason = "Server error.";

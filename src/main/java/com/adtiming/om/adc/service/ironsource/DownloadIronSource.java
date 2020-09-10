@@ -1,3 +1,5 @@
+// Copyright 2020 ADTIMING TECHNOLOGY COMPANY LIMITED
+// Licensed under the GNU Lesser General Public License Version 3
 package com.adtiming.om.adc.service.ironsource;
 
 import com.adtiming.om.adc.dto.ReportAdnData;
@@ -29,10 +31,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * Created by huangqiang on 2020/1/6.
- * DownloadFacebookNew
- */
 @Service
 public class DownloadIronSource extends AdnBaseService {
 
@@ -50,6 +48,7 @@ public class DownloadIronSource extends AdnBaseService {
     public void setAdnInfo() {
         this.adnId = 15;
         this.adnName = "ironSource";
+        this.maxTaskCount = 10;//IronSource is limited to 20 requests every 10 minutes.
     }
 
     @Override
@@ -215,7 +214,7 @@ public class DownloadIronSource extends AdnBaseService {
             case 2:
                 typeStr = "Rewarded Video";
                 break;
-            case 4:
+            case 3:
                 typeStr = "Interstitial";
                 break;
         }

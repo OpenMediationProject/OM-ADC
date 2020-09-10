@@ -51,6 +51,7 @@ public class DownloadFacebook extends AdnBaseService {
     public void setAdnInfo() {
         this.adnId = 3;
         this.adnName = "facebook";
+        this.maxTaskCount = 50;//FB You can have at most 50 queries per minute
     }
 
     @Override

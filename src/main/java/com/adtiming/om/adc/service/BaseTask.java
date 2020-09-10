@@ -135,6 +135,7 @@ public class BaseTask {
             case 12://Chartboost
             case 13://TikTok
             case 15://IronSource
+            case 17://Helium
                 keyField = "user_id";
                 break;
             case 3://facebook

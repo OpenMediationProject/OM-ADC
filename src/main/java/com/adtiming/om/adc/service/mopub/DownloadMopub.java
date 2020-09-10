@@ -51,6 +51,7 @@ public class DownloadMopub extends AdnBaseService {
     public void setAdnInfo() {
         this.adnId = 9;
         this.adnName = "Mopub";
+        this.maxTaskCount = 10;
     }
 
     @Override

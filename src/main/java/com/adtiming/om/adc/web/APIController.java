@@ -10,6 +10,7 @@ import com.adtiming.om.adc.service.adtiming.RequestAdtiming;
 import com.adtiming.om.adc.service.applovin.RequestApplovin;
 import com.adtiming.om.adc.service.chartboost.RequestChartboost;
 import com.adtiming.om.adc.service.facebook.RequestFacebook;
+import com.adtiming.om.adc.service.helium.RequestHelium;
 import com.adtiming.om.adc.service.ironsource.RequestIronSource;
 import com.adtiming.om.adc.service.mint.RequestMint;
 import com.adtiming.om.adc.service.mintegral.RequestMintegral;
@@ -67,6 +68,9 @@ public class APIController extends BaseController {
 
     @Resource
     private RequestMint mint;
+
+    @Resource
+    private RequestHelium helium;
 
     @RequestMapping("/test")
     public Object test() {
@@ -219,6 +223,16 @@ public class APIController extends BaseController {
             mint.rebuild(day, id);
         } else {
             mint.rebuild(day);
+        }
+        return Response.build();
+    }
+
+    @RequestMapping("/helium/rebuild")
+    public Object rebuildHelium(String[] day, Integer id) {
+        if (id != null && id >0) {
+            helium.rebuild(day, id);
+        } else {
+            helium.rebuild(day);
         }
         return Response.build();
     }
