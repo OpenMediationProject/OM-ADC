@@ -95,7 +95,7 @@ public class DownloadMopub extends AdnBaseService {
         }
         int status = getStatus(error);
         error = convertMsg(error);
-        if (task.runCount > 5 && status != 2) {
+        if (task.runCount >= 4 && status != 2) {
             updateAccountException(jdbcTemplate, task, error);
             LOG.error("[Mopub] executeTaskImpl error,run count:{},taskId:{},msg:{}", task.runCount + 1, task.id, error);
         } else {
