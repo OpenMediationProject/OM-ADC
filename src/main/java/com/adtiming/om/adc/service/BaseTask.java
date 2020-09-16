@@ -141,8 +141,9 @@ public class BaseTask {
             case 3://facebook
                 keyField = "adn_app_id";
                 break;
+            case 1://adtiming
             case 7://AdColony
-            case 18:
+            case 18://mint
                 keyField = "adn_app_token";
                 break;
             case 4://Unity
