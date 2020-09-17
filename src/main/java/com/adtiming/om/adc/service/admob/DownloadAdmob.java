@@ -73,10 +73,10 @@ public class DownloadAdmob extends AdnBaseService {
             }
             if (res != null && !res.isEmpty() && err.length() == 0) {
                 task.step = 2;
-                error = saveResponseData(res, task.userId);
+                String accountKey = "ca-app-" + task.userId;
+                error = saveResponseData(res, accountKey);
                 if (StringUtils.isBlank(error)) {
                     task.step = 3;
-                    String accountKey = "ca-app-" + task.userId;
                     error = savePrepareReportData(task, accountKey);
                     if (StringUtils.isBlank(error)) {
                         task.step = 4;
