@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -244,7 +245,7 @@ public class DownloadChartboost extends AdnBaseService {
         long start = System.currentTimeMillis();
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -252,6 +253,15 @@ public class DownloadChartboost extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+            if (instanceInfoList.isEmpty()) {
+                return "instance is null";
+            }
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = MapHelper.getString(ins, "placement_key");
+                putLinkKeyMap(placements, key, ins, dataDay);
             }
 
             String dataSql = "select day,country,platform,campaign_name data_key," +

@@ -24,7 +24,7 @@ public class ReportAccountService {
     @Resource
     private JdbcTemplate jdbcTemplateW;
 
-    @Scheduled(cron = "0 0 * * * *")
+    //@Scheduled(cron = "0 0 * * * *")
     public void pauseExceptionAccount() {
         //Pause the data pull account that failed 10 times
         LOG.info("pauseExceptionAccount start");
@@ -77,5 +77,4 @@ public class ReportAccountService {
         }
         LOG.info("deletePastOldReportAccount end, count:{}, cost:{}", updateCount, System.currentTimeMillis() - start);
     }
-
 }

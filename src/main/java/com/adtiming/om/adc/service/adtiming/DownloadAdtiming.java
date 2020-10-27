@@ -25,14 +25,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import static com.adtiming.om.adc.util.MapHelper.getInt;
 
 @Service
 public class DownloadAdtiming extends AdnBaseService {
@@ -194,7 +192,7 @@ public class DownloadAdtiming extends AdnBaseService {
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
@@ -203,6 +201,15 @@ public class DownloadAdtiming extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+            if (instanceInfoList.isEmpty())
+                return "instance is null";
+
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = MapHelper.getString(ins, "placement_key");
+                putLinkKeyMap(placements, key, ins, dataDay);
             }
 
             String dataSql = "SELECT day,hour,country,placement_id data_key," +

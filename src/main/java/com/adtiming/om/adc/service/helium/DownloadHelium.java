@@ -27,11 +27,11 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 public class DownloadHelium extends AdnBaseService {
@@ -206,7 +206,7 @@ public class DownloadHelium extends AdnBaseService {
         long start = System.currentTimeMillis();
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -216,7 +216,18 @@ public class DownloadHelium extends AdnBaseService {
                         .filter(m -> !placements.containsKey(MapHelper.getString(m, "placement_key")))
                         .collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+
+            if (instanceInfoList.isEmpty()) {
+                return "instance is null";
             }
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = MapHelper.getString(ins, "placement_key");
+                putLinkKeyMap(placements, key, ins, dataDay);
+            }
+
 
             String dataSql = "select day,country,helium_placement_name data_key,sum(requests) AS api_request,sum(winning_bids) api_filled," +
                     "sum(impressions) AS api_impr,0 AS api_click,sum(estimated_earnings) AS revenue" +

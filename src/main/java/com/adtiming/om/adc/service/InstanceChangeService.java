@@ -136,4 +136,30 @@ public class InstanceChangeService {
         return true;
     }
 
+    @Scheduled(cron = "0 0 1 * * *")
+    public void deleteOldInstanceChange() {
+        int count = 0;
+        LOG.info("deleteOldInstanceChange start");
+        int updateCount = 0;
+        long start = System.currentTimeMillis();
+        while (count < 5) {
+            try {
+                //删除4天前的变更配置
+                String updateSql = "UPDATE om_instance_change SET status=3 WHERE create_time<DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 4 DAY) and status=1";
+                updateCount = jdbcTemplate.update(updateSql);
+                break;
+            } catch (Exception e) {
+                count++;
+                if (count == 5) {
+                    LOG.error("deleteOldInstanceChange failed", e);
+                }
+                try {
+                    Thread.sleep(1000 * 60);
+                } catch (InterruptedException ignored) {
+                }
+            }
+        }
+        LOG.info("deleteOldInstanceChange end, count:{}, cost:{}", updateCount, System.currentTimeMillis() - start);
+    }
+
 }

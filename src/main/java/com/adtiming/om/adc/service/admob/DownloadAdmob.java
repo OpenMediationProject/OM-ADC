@@ -26,7 +26,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class DownloadAdmob extends AdnBaseService {
@@ -309,9 +308,10 @@ public class DownloadAdmob extends AdnBaseService {
         String error;
         try {
             String reportDay = task.day;
+            String pubFormatId = "ca-app-" + pubId;
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue));
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -319,12 +319,20 @@ public class DownloadAdmob extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue)));
-            }
+            }*/
+
             if (instanceInfoList.isEmpty())
-                return "data is null";
+                return "instance is null";
+
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = pubFormatId + "-" + MapHelper.getString(ins, "placement_key").replace("/", ":");
+                putLinkKeyMap(placements, key, ins, dataDay);
+            }
 
             String dataSql = "select day,0 hour,country," +
-                    "ad_unit_id adn_placement_key,ad_unit_id data_key," +
+                    "ad_unit_id adn_placement_key,concat(ad_client_id, '-', ad_unit_id) data_key," +
                     "sum(ad_requests) as api_request," +
                     "sum(individual_ad_impressions) as api_impr,sum(clicks) AS api_click," +
                     "sum(earnings) AS revenue,sum(matched_ad_requests) AS api_filled " +

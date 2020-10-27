@@ -5,9 +5,6 @@ package com.adtiming.om.adc.util;
 
 import java.time.format.DateTimeFormatter;
 
-/**
- * Created by wangqf on 2017/12/20.
- */
 public class DateTimeFormat {
     public static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     public static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");

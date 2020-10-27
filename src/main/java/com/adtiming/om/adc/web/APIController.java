@@ -16,6 +16,7 @@ import com.adtiming.om.adc.service.mint.RequestMint;
 import com.adtiming.om.adc.service.mintegral.RequestMintegral;
 import com.adtiming.om.adc.service.mopub.RequestMopub;
 import com.adtiming.om.adc.service.tapjoy.RquestTapjoy;
+import com.adtiming.om.adc.service.tencent.RequestTencent;
 import com.adtiming.om.adc.service.tiktok.RequestTikTok;
 import com.adtiming.om.adc.service.unity.RequestUnity;
 import com.adtiming.om.adc.service.vungle.RequestVungle;
@@ -41,6 +42,9 @@ public class APIController extends BaseController {
 
     @Resource
     private RequestVungle vungle;
+
+    @Resource
+    private RequestTencent tencent;
 
     @Resource
     private RequestAdcolony adcolony;
@@ -133,6 +137,16 @@ public class APIController extends BaseController {
             vungle.rebuild(day, id);
         } else {
             vungle.rebuild(day);
+        }
+        return Response.build();
+    }
+
+    @RequestMapping("/tencent/rebuild")
+    public Object rebuildTencent(String[] day, Integer id) {
+        if (id != null && id > 0) {
+            tencent.rebuild(day, id);
+        } else {
+            tencent.rebuild(day);
         }
         return Response.build();
     }
@@ -233,6 +247,131 @@ public class APIController extends BaseController {
             helium.rebuild(day, id);
         } else {
             helium.rebuild(day);
+        }
+        return Response.build();
+    }
+
+    @RequestMapping("/adnetwork/rebuild")
+    public Object rebuildAdNetwrokTask(int adnId, String[] day, Integer id) {
+        try {
+            switch (adnId) {
+                case 1:
+                    if (id != null && id > 0) {
+                        adtiming.rebuild(day, id);
+                    } else {
+                        adtiming.rebuild(day);
+                    }
+                    break;
+                case 2:
+                    if (id != null && id > 0) {
+                        admob.rebuild(day, id);
+                    } else {
+                        admob.rebuild(day);
+                    }
+                    break;
+                case 3:
+                    if (id != null && id > 0) {
+                        facebook.rebuildTask(day, id);
+                    } else {
+                        facebook.rebuildTask(day);
+                    }
+                    break;
+                case 4:
+                    if (id != null) {
+                        unity.rebuild(day, 0, id, 1);
+                    } else {
+                        unity.rebuild(day, 0, 1);
+                    }
+                    break;
+                case 5:
+                    if (id != null && id > 0) {
+                        vungle.rebuild(day, id);
+                    } else {
+                        vungle.rebuild(day);
+                    }
+                    break;
+                case 6:
+                    if (id != null && id > 0) {
+                        tencent.rebuild(day, id);
+                    } else {
+                        tencent.rebuild(day);
+                    }
+                    break;
+                case 7:
+                    if (id != null && id > 0) {
+                        adcolony.rebuild(day, id);
+                    } else {
+                        adcolony.rebuild(day);
+                    }
+                    break;
+                case 8:
+                    if (id != null && id > 0) {
+                        applovin.rebuild(day, id);
+                    } else {
+                        applovin.rebuild(day);
+                    }
+                    break;
+                case 9:
+                    if (id != null && id > 0) {
+                        mopub.rebuild(day, id);
+                    } else {
+                        mopub.rebuild(day);
+                    }
+                    break;
+                case 11:
+                    if (id != null && id > 0) {
+                        tapjoy.rebuild(day, id);
+                    } else {
+                        tapjoy.rebuild(day);
+                    }
+                    break;
+                case 12:
+                    if (id != null && id > 0) {
+                        chartboost.rebuild(day, id);
+                    } else {
+                        chartboost.rebuild(day);
+                    }
+                    break;
+                case 13:
+                    if (id != null && id > 0) {
+                        tikTok.rebuild(day, id);
+                    } else {
+                        tikTok.rebuild(day);
+                    }
+                    break;
+                case 14:
+                    if (id != null && id > 0) {
+                        mintegral.rebuild(day, id);
+                    } else {
+                        mintegral.rebuild(day);
+                    }
+                    break;
+                case 15:
+                    if (id != null && id > 0) {
+                        ironSource.rebuild(day, id);
+                    } else {
+                        ironSource.rebuild(day);
+                    }
+                    break;
+                case 17:
+                    if (id != null && id > 0) {
+                        helium.rebuild(day, id);
+                    } else {
+                        helium.rebuild(day);
+                    }
+                    break;
+                case 18:
+                    if (id != null && id >0) {
+                        mint.rebuild(day, id);
+                    } else {
+                        mint.rebuild(day);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        } catch (Exception e) {
+            Response.build().code(500).msg(e.getMessage());
         }
         return Response.build();
     }

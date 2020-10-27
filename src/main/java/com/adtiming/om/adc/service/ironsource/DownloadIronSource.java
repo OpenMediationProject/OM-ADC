@@ -25,11 +25,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -154,9 +154,9 @@ public class DownloadIronSource extends AdnBaseService {
             jdbcTemplate.update(deleteSql, day, username);
 
             String insertSql = "INSERT INTO report_ironsource (`date`, country_code, app_key, platform, ad_units, instance_id, instance_name, bundle_id, " +
-                    "app_name, revenue, ecpm, impressions, active_users, engaged_users, engagement_rate, impressions_per_engaged_user, revenue_per_active_user, " +
-                    "revenue_per_engaged_user,engaged_sessions,impression_per_engaged_sessions,impressions_per_session,sessions_per_active_user,ad_source_checks,ad_source_responses,ad_source_availability_rate,clicks,click_through_rate,username) " +
-                    " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                    "app_name, revenue, impressions, active_users, engaged_users, impressions_per_engaged_user, revenue_per_active_user, " +
+                    "revenue_per_engaged_user,engaged_sessions,impression_per_engaged_sessions,impressions_per_session,sessions_per_active_user,ad_source_checks,ad_source_responses,clicks,username) " +
+                    " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
             List<Object[]> lsParm = new ArrayList<>(1000);
             JSONArray jsonArray = JSONArray.parseArray(jsonData);
@@ -178,15 +178,24 @@ public class DownloadIronSource extends AdnBaseService {
                         Object[] params = new Object[]{date, country,
                                 appKeyStr, platform, adUnits, insId, insName, bundleId, appName,
                                 Util.getJSONDecimal(countryData, "revenue"),
-                                Util.getJSONDecimal(countryData, "eCPM"), Util.getJSONInt(countryData, "impressions"),
-                                Util.getJSONInt(countryData, "activeUsers"), Util.getJSONInt(countryData, "engagedUsers"),
-                                Util.getJSONDecimal(countryData, "engagementRate"), Util.getJSONDecimal(countryData, "impressionsPerEngagedUser"),
-                                Util.getJSONDecimal(countryData, "revenuePerActiveUser"), Util.getJSONDecimal(countryData, "revenuePerEngagedUser"),
-                                Util.getJSONInt(countryData, "engagedSessions"), Util.getJSONDecimal(countryData, "impressionPerEngagedSessions"),
-                                Util.getJSONDecimal(countryData, "impressionsPerSession"), Util.getJSONDecimal(countryData, "sessionsPerActiveUser"),
-                                Util.getJSONInt(countryData, "adSourceChecks"), Util.getJSONInt(countryData, "adSourceResponses"),
-                                Util.getJSONDecimal(countryData, "adSourceAvailabilityRate"), Util.getJSONInt(countryData, "clicks"),
-                                Util.getJSONDecimal(countryData, "clickThroughRate"), username
+                                //Util.getJSONDecimal(countryData, "eCPM"),
+                                Util.getJSONInt(countryData, "impressions"),
+                                Util.getJSONInt(countryData, "activeUsers"),
+                                Util.getJSONInt(countryData, "engagedUsers"),
+                                //Util.getJSONDecimal(countryData, "engagementRate"),
+                                Util.getJSONDecimal(countryData, "impressionsPerEngagedUser"),
+                                Util.getJSONDecimal(countryData, "revenuePerActiveUser"),
+                                Util.getJSONDecimal(countryData, "revenuePerEngagedUser"),
+                                Util.getJSONInt(countryData, "engagedSessions"),
+                                Util.getJSONDecimal(countryData, "impressionPerEngagedSessions"),
+                                Util.getJSONDecimal(countryData, "impressionsPerSession"),
+                                Util.getJSONDecimal(countryData, "sessionsPerActiveUser"),
+                                Util.getJSONInt(countryData, "adSourceChecks"),
+                                Util.getJSONInt(countryData, "adSourceResponses"),
+                                //Util.getJSONDecimal(countryData, "adSourceAvailabilityRate"),
+                                Util.getJSONInt(countryData, "clicks"),
+                                //Util.getJSONDecimal(countryData, "clickThroughRate"),
+                                username
                         };
                         lsParm.add(params);
                         dataCount++;
@@ -239,7 +248,7 @@ public class DownloadIronSource extends AdnBaseService {
                 return "data is null";
 
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream()
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream()
                     .collect(Collectors.toMap(m ->
                                     String.format("%s_%s_%s", MapHelper.getString(m, "adn_app_key"), getAdTypeString(MapHelper.getInt(m, "ad_type")),
                                             MapHelper.getString(m, "placement_key")),
@@ -254,6 +263,18 @@ public class DownloadIronSource extends AdnBaseService {
                                         String.format("%s_%s_%s", MapHelper.getString(m, "adn_app_key"), getAdTypeString(MapHelper.getInt(m, "ad_type")),
                                                 MapHelper.getString(m, "placement_key")),
                                 m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+            if (instanceInfoList.isEmpty()) {
+                return "instance is null";
+            }
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = String.format("%s_%s_%s",
+                        MapHelper.getString(ins, "adn_app_key"),
+                        getAdTypeString(MapHelper.getInt(ins, "ad_type")),
+                        MapHelper.getString(ins, "placement_key"));
+                putLinkKeyMap(placements, key, ins, dataDay);
             }
             error = toAdnetworkLinked(task, username, placements, oriDataList);
         } catch (Exception e) {

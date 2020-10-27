@@ -18,11 +18,16 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static com.adtiming.om.adc.util.MapHelper.getInt;
 
 public abstract class AdnBaseService {
 
@@ -40,6 +45,9 @@ public abstract class AdnBaseService {
     protected String adnName;
 
     protected int maxTaskCount = 100;
+    protected static DateTimeFormatter DATEFORMAT_YMD = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    protected static DateTimeFormatter DATEFORMAT_DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
+    protected static DateTimeFormatter DATEFORMAT_YMD_HMS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @PostConstruct
     public void init() {
@@ -232,7 +240,8 @@ public abstract class AdnBaseService {
         String sql = "SELECT a.id AS instance_id,a.placement_key,a.placement_id,a.pub_app_id,a.adn_id,a.ab_test_mode," +
                 "b.adn_app_key,c.publisher_id,c.ad_type," +
                 "d.plat,d.category,d.app_id," +
-                "IFNULL(e.revenue_sharing,1) AS revenue_sharing,a.hb_status" +
+                "IFNULL(e.revenue_sharing,1) AS revenue_sharing,a.hb_status," +
+                "0 use_level,date_format(a.create_time, '%Y-%m-%d') create_day,date_format(a.create_time, '%Y-%m-%d %H:%i:%s') create_time" +
                 " FROM om_instance a" +
                 " LEFT JOIN om_adnetwork_app b ON a.adn_app_id=b.id" +
                 " LEFT JOIN om_placement c ON a.placement_id=c.id" +
@@ -244,13 +253,19 @@ public abstract class AdnBaseService {
         if (!oldList.isEmpty()) {
             list.addAll(oldList);
         }
+        Set<Integer> insIds = list.stream().map(o-> getInt(o, "instance_id")).collect(Collectors.toSet());
+        List<Map<String, Object>> oldInstanceList = getOldInstanceList(insIds);
+        if (!oldInstanceList.isEmpty()) {
+            list.addAll(oldInstanceList);
+        }
         return list;
     }
     private List<Map<String, Object>> getAccountChangedList(String whereSql) {
         String sql = "SELECT a.id AS instance_id,a.placement_key,a.placement_id,a.pub_app_id,a.adn_id,a.ab_test_mode," +
                 "b.adn_app_key,c.publisher_id,c.ad_type," +
                 "d.plat,d.category,d.app_id," +
-                "IFNULL(e.revenue_sharing,1) AS revenue_sharing,a.hb_status" +
+                "IFNULL(e.revenue_sharing,1) AS revenue_sharing,a.hb_status," +
+                "1 use_level,date_format(a.create_time, '%Y-%m-%d') create_day,date_format(a.create_time, '%Y-%m-%d %H:%i:%s') create_time" +
                 " FROM om_instance a" +
                 " LEFT JOIN om_adnetwork_app_change b ON a.adn_app_id=b.id" +
                 " LEFT JOIN om_placement c ON a.placement_id=c.id" +
@@ -269,7 +284,7 @@ public abstract class AdnBaseService {
                         "b.adn_app_key," +
                         "c.publisher_id,c.ad_type," +
                         "d.plat,d.category,d.app_id," +
-                        "IFNULL(e.revenue_sharing,1) as revenue_sharing,f.hb_status" +
+                        "IFNULL(e.revenue_sharing,1) as revenue_sharing,f.hb_status, %s" +
                         " from om_instance_change a" +
                         " left join om_adnetwork_app b on a.adn_app_id=b.id" +
                         " left join om_placement c on a.placement_id=c.id" +
@@ -278,8 +293,35 @@ public abstract class AdnBaseService {
                         " left join om_instance f on (a.id=f.id)" +
                         " where a.adn_id=? AND a.placement_key is not null and a.placement_key !='' " +
                         " and a.id in (%s)",
+                "2 use_level,date_format(a.create_time, '%Y-%m-%d') create_day,date_format(a.create_time, '%Y-%m-%d %H:%i:%s') create_time",
                 StringUtils.join(insIds, ","));
         return jdbcTemplate.queryForList(sql, adnId);
+    }
+
+    protected void putLinkKeyMap(Map<String, Map<String,Object>> placements, String key, Map<String, Object> ins, LocalDate dataDay) {
+        int useLevel = MapHelper.getInt(ins, "use_level");
+        String createDay = MapHelper.getString(ins, "create_day");
+        LocalDate date = LocalDate.parse(createDay, DATEFORMAT_YMD);
+        if (useLevel > 0 && !date.isEqual(dataDay)) {//The change record is only valid on the day of the change
+            return;
+        }
+        Map<String, Object> map = placements.get(key);
+        if (map == null) {
+            placements.put(key, ins);
+        } else {
+            int existStatus = MapHelper.getInt(map, "instance_status");
+            int status = MapHelper.getInt(ins, "instance_status");
+            if (status == existStatus) {//Status priority
+                int existUseLevel = MapHelper.getInt(map, "use_level");
+                if (useLevel < existUseLevel) {//The smaller the useLevel, the higher the priority
+                    placements.put(key, ins);
+                }
+            } else {
+                if (status == 1) {//Active priority
+                    placements.put(key, ins);
+                }
+            }
+        }
     }
 
     private BigDecimal getCurrencyByDay(String currency, String day) {

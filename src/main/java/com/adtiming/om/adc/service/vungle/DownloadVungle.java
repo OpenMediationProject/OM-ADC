@@ -25,11 +25,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 public class DownloadVungle extends AdnBaseService {
@@ -187,7 +187,7 @@ public class DownloadVungle extends AdnBaseService {
         long start = System.currentTimeMillis();
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -195,9 +195,19 @@ public class DownloadVungle extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+
+            if (instanceInfoList.isEmpty()) {
+                return "instance is null";
+            }
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = MapHelper.getString(ins, "adn_app_key") + "_" + MapHelper.getString(ins, "placement_key");
+                putLinkKeyMap(placements, key, ins, dataDay);
             }
 
-            String dataSql = "select day,country,platform,placement_reference_id dataKey," +
+            String dataSql = "select day,country,platform,concat(application_id, '_', placement_reference_id) dataKey," +
                     "sum(views) api_video_start,sum(completes) AS api_video_complete," +
                     "sum(views) AS api_impr,sum(clicks) AS api_click," +
                     "sum(revenue) AS revenue " +

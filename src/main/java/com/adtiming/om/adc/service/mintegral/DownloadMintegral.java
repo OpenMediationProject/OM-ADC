@@ -8,6 +8,7 @@ import com.adtiming.om.adc.dto.ReportTask;
 import com.adtiming.om.adc.service.AdnBaseService;
 import com.adtiming.om.adc.service.AppConfig;
 import com.adtiming.om.adc.util.Encrypter;
+import com.adtiming.om.adc.util.MapHelper;
 import com.adtiming.om.adc.util.MyHttpClient;
 import com.adtiming.om.adc.util.ParamsBuilder;
 import com.alibaba.fastjson.JSONArray;
@@ -26,11 +27,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
-
-import static com.adtiming.om.adc.util.MapHelper.getInt;
-import static com.adtiming.om.adc.util.MapHelper.getString;
 
 @Service
 public class DownloadMintegral extends AdnBaseService {
@@ -233,7 +231,7 @@ public class DownloadMintegral extends AdnBaseService {
         String error;
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o-> getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -241,9 +239,19 @@ public class DownloadMintegral extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+            if (instanceInfoList.isEmpty()) {
+                return "instance is null";
+            }
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = MapHelper.getString(ins, "adn_app_key").split("#")[0] + "-"
+                        + MapHelper.getString(ins, "placement_key");
+                putLinkKeyMap(placements, key, ins, dataDay);
             }
 
-            String dataSql = "select day,country,platform,unit_id data_key,sum(request) api_request,sum(filled) AS api_filled," +
+            String dataSql = "select day,country,platform,concat(app_id,'-',unit_id) data_key,sum(request) api_request,sum(filled) AS api_filled," +
                     "sum(impression) api_impr,sum(click) AS api_click,sum(revenue) AS revenue" +
                     " from report_mintegral where day=? and app_key=? group by day,country,unit_id ";
 

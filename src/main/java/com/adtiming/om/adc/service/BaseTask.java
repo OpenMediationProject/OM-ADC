@@ -132,6 +132,7 @@ public class BaseTask {
         String keyField = "";
         switch (adnId) {
             case 2://admob
+            case 6://Tencent
             case 12://Chartboost
             case 13://TikTok
             case 15://IronSource
@@ -185,16 +186,15 @@ public class BaseTask {
             case 11://Tapjoy
                 fileds = new String[]{"adn_api_key", "adn_app_token"};
                 break;
+            case 6://Tencent
             case 12://Chartboost
             case 13://TikTok
+            case 15://IronSource
             case 17://helium
                 fileds = new String[]{"user_id", "user_signature"};
                 break;
             case 14://Mintegral
                 fileds = new String[]{"adn_api_key", "user_signature"};
-                break;
-            case 15://IronSource
-                fileds = new String[]{"user_id", "user_signature"};
                 break;
         }
         StringBuilder whereSql = new StringBuilder();

@@ -31,10 +31,10 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class DownloadUnity extends AdnBaseService {
@@ -365,7 +365,7 @@ public class DownloadUnity extends AdnBaseService {
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
 
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "adn_app_key") + "_" + MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
             placements.putAll(instanceInfoList.stream().collect(Collectors.toMap(m ->
                     MapHelper.getString(m, "adn_app_key") + "_" + MapHelper.getString(m, "adn_app_key"), m -> m, (existingValue, newValue) -> existingValue)));
@@ -376,6 +376,18 @@ public class DownloadUnity extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         MapHelper.getString(m, "adn_app_key") + "_" + MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+
+            if (instanceInfoList.isEmpty()) {
+                return "instance is null";
+            }
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = MapHelper.getString(ins, "adn_app_key") + "_" + MapHelper.getString(ins, "placement_key");
+                putLinkKeyMap(placements, key, ins, dataDay);
+                String key2 = MapHelper.getString(ins, "adn_app_key") + "_" + MapHelper.getString(ins, "adn_app_key");
+                putLinkKeyMap(placements, key2, ins, dataDay);
             }
 
             String dataSql = String.format("select day,hour,country,case when source_zone is null or source_zone = '' then concat(source_game_id,'_',source_game_id) else concat(source_game_id,'_',source_zone) end data_key," +

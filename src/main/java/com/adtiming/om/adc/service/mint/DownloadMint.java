@@ -28,12 +28,10 @@ import javax.annotation.Resource;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import static com.adtiming.om.adc.util.MapHelper.getInt;
 import static com.adtiming.om.adc.util.MapHelper.getString;
 
 @Service
@@ -213,7 +211,7 @@ public class DownloadMint extends AdnBaseService {
         String error;
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-            Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> getAppKey(getString(m,"adn_app_key")) + "_" + getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
+            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> getAppKey(getString(m,"adn_app_key")) + "_" + getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
 
             // instance's placement_key changed
             Set<Integer> insIds = instanceInfoList.stream().map(o-> getInt(o, "instance_id")).collect(Collectors.toSet());
@@ -221,6 +219,15 @@ public class DownloadMint extends AdnBaseService {
             if (!oldInstanceList.isEmpty()) {
                 placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
                         getAppKey(getString(m,"adn_app_key")) + "_" + getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
+            }*/
+            if (instanceInfoList.isEmpty()) {
+                return "instance is null";
+            }
+            LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
+            Map<String, Map<String, Object>> placements = new HashMap<>();
+            for (Map<String, Object> ins : instanceInfoList) {
+                String key = getAppKey(getString(ins,"adn_app_key")) + "_" + getString(ins, "placement_key");
+                putLinkKeyMap(placements, key, ins, dataDay);
             }
 
             String dataSql = "select day,country,platform,concat(app_id,'_',tag_id) data_key,sum(request) api_request,sum(fill) AS api_filled," +
