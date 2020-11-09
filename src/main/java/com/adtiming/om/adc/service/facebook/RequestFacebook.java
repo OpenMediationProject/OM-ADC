@@ -132,7 +132,7 @@ public class RequestFacebook extends BaseTask {
                 }
             } else {
                 //出现新错误告警
-                long errorId = JdbcHelper.insertReturnId(jdbcTemplate,"insert into report_adnetwork_error(adn_id,content)values(?,?)", 2, error);
+                long errorId = JdbcHelper.insertReturnId(jdbcTemplate,"insert into report_adnetwork_error(adn_id,content)values(?,?)", 3, error);
                 jdbcTemplate.update("UPDATE report_adnetwork_account SET reason=?,error_id=? WHERE id=?",
                         error, errorId, conf.id);
                 LOG.error("[Facebook] add new error info,report_account_id:{},error:{}", conf.id, error);

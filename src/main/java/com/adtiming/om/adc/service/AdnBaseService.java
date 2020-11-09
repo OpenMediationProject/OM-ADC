@@ -352,7 +352,7 @@ public abstract class AdnBaseService {
                 return "data is null";
             String whereSql = "";
             error = "";
-            if (adnId == 3) {
+            if (adnId == 4) {//Unity
                 whereSql = task.timeDimension == 0 ? "and hour=" + task.hour : "";
             }
 
