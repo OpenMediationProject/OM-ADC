@@ -180,7 +180,7 @@ public class DownloadTencent extends AdnBaseService {
             for (int i = 0; i < jsonArray.size(); i++) {
                 JSONObject obj = jsonArray.getJSONObject(i);
                 count++;
-                Object[] params = new Object[]{ obj.get("date"), obj.get("member_id"), obj.get("medium_name"),
+                Object[] params = new Object[]{ day, obj.get("member_id"), obj.get("medium_name"),
                         obj.get("app_id"), obj.get("placement_id"), obj.getString("placement_name"),
                         obj.getString("placement_type"), obj.getBoolean("is_summary") ? 1 : 0,
                         obj.getIntValue("request_count"), obj.getIntValue("return_count"),
