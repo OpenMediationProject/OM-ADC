@@ -302,24 +302,13 @@ public class DownloadAdmob extends AdnBaseService {
         return error;
     }
 
-    public String savePrepareReportData(ReportTask task, String pubId) {
+    public String savePrepareReportData(ReportTask task, String accountKey) {
         LOG.info("[Admob] savePrepareReportData start, taskId:{}, day", task.id);
         long start = System.currentTimeMillis();
         String error;
         try {
             String reportDay = task.day;
-            String pubFormatId = "ca-app-" + pubId;
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-
-            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue));
-
-            // instance's placement_key changed
-            Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
-            List<Map<String, Object>> oldInstanceList = getOldInstanceList(insIds);
-            if (!oldInstanceList.isEmpty()) {
-                placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
-                        MapHelper.getString(m, "placement_key").replace("/",":"), m -> m, (existingValue, newValue) -> existingValue)));
-            }*/
 
             if (instanceInfoList.isEmpty())
                 return "instance is null";
@@ -327,7 +316,7 @@ public class DownloadAdmob extends AdnBaseService {
             LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
             Map<String, Map<String, Object>> placements = new HashMap<>();
             for (Map<String, Object> ins : instanceInfoList) {
-                String key = pubFormatId + "-" + MapHelper.getString(ins, "placement_key").replace("/", ":");
+                String key = accountKey + "-" + MapHelper.getString(ins, "placement_key").replace("/", ":");
                 putLinkKeyMap(placements, key, ins, dataDay);
             }
 
@@ -339,10 +328,10 @@ public class DownloadAdmob extends AdnBaseService {
                     " FROM report_admob where day=? and ad_client_id=?" +
                     " group by day,country,ad_unit_id";
 
-            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, pubId);
+            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, accountKey);
             if (oriDataList.isEmpty())
                 return "data is null";
-            error = toAdnetworkLinked(task, pubId, placements, oriDataList);
+            error = toAdnetworkLinked(task, accountKey, placements, oriDataList);
         } catch (Exception e) {
             error = String.format("savePrepareReportData error, msg:%s", e.getMessage());
         }
