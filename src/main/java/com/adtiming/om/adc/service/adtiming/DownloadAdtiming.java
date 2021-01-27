@@ -70,17 +70,16 @@ public class DownloadAdtiming extends AdnBaseService {
             return;
         }
 
-
         LOG.info("[Adtiming] executeTaskImpl start, pubToken:{}, day:{}", token, day);
         long start = System.currentTimeMillis();
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
         task.step = 1;
-        String json_data = downJsonData(task.id, token, day, err);
+        String json_data = downJsonData(task, token, day, err);
         if (StringUtils.isNotBlank(json_data) && err.length() == 0) {
             task.step = 2;
-            error = jsonDataImportDatabase(json_data, day, token);
+            error = jsonDataImportDatabase(task, json_data, day, token);
             if (StringUtils.isBlank(error)) {
                 task.step = 3;
                 error = saveReportData(task);
@@ -100,18 +99,21 @@ public class DownloadAdtiming extends AdnBaseService {
         } else {
             updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        LOG.info("[Adtiming] executeTaskImpl end, pubToken:{}, cost:{}", token, day, System.currentTimeMillis() - start);
+        LOG.info("[Adtiming] executeTaskImpl end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
     }
 
-    private String downJsonData(int taskId, String pubToken, String day, StringBuilder err) {
-        String url = String.format("http://sdk.adtimingapi.com/report?type=json&encoding=UTF-8&token=%s&mediation=100&df=%s&dt=%s", pubToken, day, day);
+    private String downJsonData(ReportTask task, String pubToken, String day, StringBuilder err) {
+        String breakdowns = "app,os,placement,country";
+        String metrics = "request,filled,impr,click,videoStart,videoFinish,revenue";
+        String timeDimension = task.timeDimension == 1 ? "day" : "hour";
+        String url = String.format("http://sdk.adtimingapi.com/report/adt/v3?format=json&encoding=UTF-8&token=%s&start=%s&end=%s&breakdowns=%s&metrics=%s&timeDimension=%s", pubToken, day, day, breakdowns, metrics, timeDimension);
         String json_data = "";
         HttpEntity entity = null;
         LOG.info("[Adtiming] request url:{}", url);
-        LOG.info("[Adtiming] downJsonData start, taskId:{}", taskId);
+        LOG.info("[Adtiming] downJsonData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         try {
-            updateReqUrl(jdbcTemplate, taskId, url);
+            updateReqUrl(jdbcTemplate, task.id, url);
             LOG.info("Adtiming:" + LocalDateTime.now().toLocalTime());
             HttpGet httpGet = new HttpGet(url);
             RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(5 * 60 * 1000).setProxy(cfg.httpProxy).build();
@@ -133,23 +135,21 @@ public class DownloadAdtiming extends AdnBaseService {
         } finally {
             EntityUtils.consumeQuietly(entity);
         }
-        LOG.info("[Adtiming] downJsonData end, taskId:{}, cost:{}", taskId, System.currentTimeMillis() - start);
+        LOG.info("[Adtiming] downJsonData end, taskId:{}, cost:{}", task.id, System.currentTimeMillis() - start);
         return json_data;
     }
 
-    private String jsonDataImportDatabase(String jsonData, String day, String pubToken) {
-        String deleteSql = "DELETE FROM report_adtiming WHERE day=? AND pub_token=?";
+    private String jsonDataImportDatabase(ReportTask task, String jsonData, String day, String pubToken) {
+        String deleteSql = String.format("delete from report_adtiming where day=? and pub_token=? %s", task.timeDimension == 0 ? "and hour=" + task.hour : "");
         try {
             jdbcTemplate.update(deleteSql, day, pubToken);
         } catch (Exception e) {
             return String.format("delete report_adtiming error,msg:%s", e.getMessage());
         }
-        LOG.info("[Adtiming] jsonDataImportDatabase start,pubToken:{}, day:{}", pubToken, day);
+        LOG.info("[Adtiming] jsonDataImportDatabase start,taskId:{}, day:{}", task.id, day);
         long start = System.currentTimeMillis();
         String error = "";
-        String sql_insert = "INSERT INTO report_adtiming (day,hour,country,app_id,app_name,placement_id,placement_name," +
-                "impression,click,earning,ecpm,pub_token) " +
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)";
+        String sql_insert = "INSERT INTO report_adtiming (day,hour,country,app_pk_name,app_name,app_key,os,placement_id,placement_name,request,filled,impression,click,video_start,video_finish,earning,pub_token) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         int count = 0;
         try {
 
@@ -161,12 +161,15 @@ public class DownloadAdtiming extends AdnBaseService {
             for (int i = 0; i < jsonArray.size(); i++) {
                 JSONObject obj = jsonArray.getJSONObject(i);
                 count++;
-                Object[] params = new Object[]{obj.get("Date"), 0,
-                        countryService.convertA3ToA2(obj.getString("Country")),
-                        obj.getInteger("AppID"), obj.getString("AppName"),
-                        obj.getInteger("PlacementId"), obj.getString("PlacementName"),
-                        obj.getLong("Impression"), obj.getLong("Click"),
-                        obj.getBigDecimal("Earning"), obj.getBigDecimal("Ecpm"), pubToken
+                Object[] params = new Object[]{obj.get("day"), obj.getIntValue("hour"),
+                        countryService.convertA3ToA2(obj.getString("country")),
+                        obj.getString("appId"), obj.getString("appName"),
+                        obj.getString("appKey"), obj.getString("os"),
+                        obj.getInteger("placementId"), obj.getString("placementName"),
+                        obj.getLong("request"), obj.getLong("filled"),
+                        obj.getLong("impr"), obj.getLong("click"),
+                        obj.getLong("videoStart"), obj.getLong("videoFinish"),
+                        obj.getBigDecimal("revenue"), pubToken
                 };
                 if (lsParm.size() >= 1000) {
                     jdbcTemplate.batchUpdate(sql_insert, lsParm);
@@ -180,8 +183,7 @@ public class DownloadAdtiming extends AdnBaseService {
         } catch (Exception e) {
             error = String.format("insert report_adtiming error, msg:%s", e.getMessage());
         }
-        LOG.info("[Adtiming] jsonDataImportDatabase end, pubToken:{}, day:{}, count:{}, cost:{}", pubToken, day,
-                count,System.currentTimeMillis() - start);
+        LOG.info("[Adtiming] jsonDataImportDatabase end, taskId:{}, count:{}, cost:{}", task.id, count,System.currentTimeMillis() - start);
         return error;
     }
 
@@ -191,29 +193,20 @@ public class DownloadAdtiming extends AdnBaseService {
         String error;
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-
-            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m ->
-                    MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
-
-            // instance's placement_key changed
-            Set<Integer> insIds = instanceInfoList.stream().map(o -> getInt(o, "instance_id")).collect(Collectors.toSet());
-            List<Map<String, Object>> oldInstanceList = getOldInstanceList(insIds);
-            if (!oldInstanceList.isEmpty()) {
-                placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
-                        MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
-            }*/
             if (instanceInfoList.isEmpty())
                 return "instance is null";
 
             LocalDate dataDay = LocalDate.parse(task.day, DATEFORMAT_YMD);
             Map<String, Map<String, Object>> placements = new HashMap<>();
             for (Map<String, Object> ins : instanceInfoList) {
-                String key = MapHelper.getString(ins, "placement_key");
+                String key = MapHelper.getString(ins, "adn_app_key") + "_" + MapHelper.getString(ins, "placement_key");
                 putLinkKeyMap(placements, key, ins, dataDay);
             }
 
-            String dataSql = "SELECT day,hour,country,placement_id data_key," +
-                    "sum(impression) AS api_impr,sum(click) AS api_click,sum(earning) AS revenue" +
+            String dataSql = "SELECT day,hour,country,concat(app_key,'_', placement_id) data_key," +
+                    "sum(request) api_request, sum(filled) api_filled," +
+                    "sum(impression) AS api_impr,sum(click) AS api_click," +
+                    "sum(video_start) api_video_start,sum(video_finish) api_video_complete, sum(earning) AS revenue" +
                     " FROM report_adtiming WHERE day=? AND pub_token=? " +
                     " GROUP BY day,hour,country,placement_id";
 

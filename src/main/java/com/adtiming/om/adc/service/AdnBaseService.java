@@ -195,6 +195,7 @@ public abstract class AdnBaseService {
                     }
                 } else {
                     long errorId = JdbcHelper.insertReturnId(jdbcTemplateW,"insert into report_adnetwork_error(adn_id,content)values(?,?)", adnId, reason);
+                    refreshReportAPIError();
                     //New error warning
                     jdbcTemplateW.update("UPDATE report_adnetwork_account SET reason=?,error_id=? WHERE id=?", reason, errorId, task.reportAccountId);
                     LOG.error("{} add new error info,report_account_id:{},error:{}", adnName, task.reportAccountId, reason);
@@ -352,7 +353,7 @@ public abstract class AdnBaseService {
                 return "data is null";
             String whereSql = "";
             error = "";
-            if (adnId == 4) {//Unity
+            if (adnId == 1 || adnId == 4) {//Adtiming | Unity
                 whereSql = task.timeDimension == 0 ? "and hour=" + task.hour : "";
             }
 
