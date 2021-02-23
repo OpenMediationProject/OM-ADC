@@ -21,7 +21,7 @@ public class RequestIronSource extends BaseTask {
     @Resource
     private JdbcTemplate jdbcTemplateW;
 
-    private final int timeDelay = -8;
+    private final int timeDelay = -1;
 
     @Scheduled(cron = "0 40 * * * ?")
     public void buildTask() {

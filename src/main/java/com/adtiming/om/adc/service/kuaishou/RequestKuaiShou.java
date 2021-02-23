@@ -1,7 +1,7 @@
 // Copyright 2020 ADTIMING TECHNOLOGY COMPANY LIMITED
 // Licensed under the GNU Lesser General Public License Version 3
 
-package com.adtiming.om.adc.service.mintegral;
+package com.adtiming.om.adc.service.kuaishou;
 
 import com.adtiming.om.adc.service.AppConfig;
 import com.adtiming.om.adc.service.BaseTask;
@@ -16,55 +16,57 @@ import javax.annotation.Resource;
 import java.time.LocalDateTime;
 
 @Service
-public class RequestMintegral extends BaseTask {
-
+public class RequestKuaiShou extends BaseTask {
     private static final Logger LOG = LogManager.getLogger();
 
     @Resource
     private AppConfig cfg;
 
     @Resource
-    private JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplateW;
 
-    private final int timeDelay = -2;
+    private final int timeDelay = -10;
 
     @Scheduled(cron = "0 33 * * * ?")
-    public void buildTask() {
+    public void run() {
         if (!cfg.isProd())
             return;
 
-        LOG.info("[Mintegral] buildCurrentTask Start");
+        LOG.info("[KuaiShou] buildCurrentTask Start");
         long start = System.currentTimeMillis();
         String[] days = { LocalDateTime.now().plusHours(timeDelay).format(DateTimeFormat.DAY_FORMAT) };
         rebuild(days);
-        LOG.info("[Mintegral] buildCurrentTask End, cost:{}", System.currentTimeMillis() - start);
+        LOG.info("[KuaiShou] buildCurrentTask End, cost:{}", System.currentTimeMillis() - start);
     }
 
-    @Scheduled(cron = "0 33 3 * * ?")
-    public void buildTesterdayTask() {
+    @Scheduled(cron = "0 33 0 * * ?")
+    public void yesterday_run() {
         if (!cfg.isProd())
             return;
 
-        LOG.info("[Mintegral] buildResetTask Start");
+        LOG.info("[KuaiShou] buildResetTask Start");
         long start = System.currentTimeMillis();
-        String[] days = { LocalDateTime.now().plusHours(timeDelay).plusDays(-1).format(DateTimeFormat.DAY_FORMAT) };
+        String[] days = {
+                LocalDateTime.now().plusHours(timeDelay).plusDays(-1).format(DateTimeFormat.DAY_FORMAT),
+                LocalDateTime.now().plusHours(timeDelay).plusDays(-2).format(DateTimeFormat.DAY_FORMAT)
+        };
         rebuild(days);
-        LOG.info("[Mintegral] buildResetTask End, cost:{}", System.currentTimeMillis() - start);
+        LOG.info("[KuaiShou] buildResetTask End, cost:{}", System.currentTimeMillis() - start);
     }
 
     public void rebuild(String[] days) {
         try {
-            buildTask(jdbcTemplate, days, 0, 14, "Mintegral");
+            buildTask(jdbcTemplateW, days, 0, 21, "KuaiShou");
         } catch (Exception e) {
-            LOG.error("[Mintegral] build task error", e);
+            LOG.error("[KuaiShou] build task error", e);
         }
     }
 
-    public void rebuild(String[] days, int accountId) {
+    public void rebuild(String[] days, int id) {
         try {
-            buildTaskById(jdbcTemplate, accountId, days, 0, 14, "Mintegral");
+            buildTaskById(jdbcTemplateW, id, days, 0, 21, "KuaiShou");
         } catch (Exception e) {
-            LOG.error("[Mintegral] build task error", e);
+            LOG.error("[KuaiShou] build task error", e);
         }
     }
 }

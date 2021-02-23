@@ -25,13 +25,15 @@ public class RequestAdtiming extends BaseTask {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
+    private final int TIME_DELAY = -1;
+
     @Scheduled(cron = "0 30 * * * ?")
     public void buildCurrentTask() {
         if (!cfg.isProd())
             return;
         LOG.info("[Adtiming] buildCurrentTask Start");
         long start = System.currentTimeMillis();
-        String[] days = { LocalDateTime.now().format(DateTimeFormat.DAY_FORMAT) };
+        String[] days = { LocalDateTime.now().plusHours(TIME_DELAY).format(DateTimeFormat.DAY_FORMAT) };
         rebuild(days);
         LOG.info("[Adtiming] buildCurrentTask End, cost:{}", System.currentTimeMillis() - start);
     }
@@ -42,7 +44,7 @@ public class RequestAdtiming extends BaseTask {
             return;
         LOG.info("[Adtiming] buildResetTask Start");
         long start = System.currentTimeMillis();
-        String[] days = { LocalDateTime.now().plusDays(-1).format(DateTimeFormat.DAY_FORMAT) };
+        String[] days = { LocalDateTime.now().plusHours(TIME_DELAY).plusDays(-1).format(DateTimeFormat.DAY_FORMAT) };
         rebuild(days);
         LOG.info("[Adtiming] buildResetTask End, cost:{}", System.currentTimeMillis() - start);
     }

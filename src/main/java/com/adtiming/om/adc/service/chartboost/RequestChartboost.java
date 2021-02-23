@@ -26,7 +26,7 @@ public class RequestChartboost extends BaseTask {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
-    private final int TIME_DELAY = -20;
+    private final int TIME_DELAY = -12;
 
     @Scheduled(cron = "0 18 * * * ?")
     public void buildTodayTask() {

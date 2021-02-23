@@ -23,7 +23,7 @@ public class RequestHelium extends BaseTask {
     @Resource
     private JdbcTemplate jdbcTemplateW;
 
-    private final int timeDelay = -20;
+    private final int timeDelay = -12;
 
     @Scheduled(cron = "0 18 * * * ?")
     public void buildTodayTask() {

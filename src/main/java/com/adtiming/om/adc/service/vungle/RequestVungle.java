@@ -26,7 +26,7 @@ public class RequestVungle extends BaseTask {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
-    private final int TIME_DELAY = -8;
+    private final int TIME_DELAY = -1;
 
     @Scheduled(cron = "0 45 * * * ?")
     public void buildCurrentTask() {

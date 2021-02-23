@@ -42,7 +42,7 @@ public class RequestFacebook extends BaseTask {
     private DownloadFacebook downloadFacebook;
 
 
-    private final int TIME_DELAY = -17;
+    private final int TIME_DELAY = -9;
 
     @Scheduled(cron = "0 19 * * * ?")
     public void buildTask() {

@@ -137,6 +137,8 @@ public class BaseTask {
             case 13://TikTok
             case 15://IronSource
             case 17://Helium
+            case 20://Sigmob
+            case 21://kuaishou
                 keyField = "user_id";
                 break;
             case 3://facebook
@@ -191,6 +193,8 @@ public class BaseTask {
             case 13://TikTok
             case 15://IronSource
             case 17://helium
+            case 20://Sigmob
+            case 21://kuaishou
                 fileds = new String[]{"user_id", "user_signature"};
                 break;
             case 14://Mintegral

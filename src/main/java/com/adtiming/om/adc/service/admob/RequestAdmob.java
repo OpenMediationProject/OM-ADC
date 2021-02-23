@@ -26,7 +26,7 @@ public class RequestAdmob extends BaseTask {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
-    private final int TIME_DELAY = -11;
+    private final int TIME_DELAY = -3;
 
     @Scheduled(cron = "0 3 * * * ?")
     public void buildCurrentTask() {

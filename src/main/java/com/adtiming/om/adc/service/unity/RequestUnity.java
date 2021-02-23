@@ -27,7 +27,7 @@ public class RequestUnity extends BaseTask {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
-    private final int TIME_DELAY = -10;
+    private final int TIME_DELAY = -2;
 
     @Scheduled(cron = "0 50 * * * *")
     public void buildCurrentTask() {
