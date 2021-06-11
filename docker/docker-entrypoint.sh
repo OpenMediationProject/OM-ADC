@@ -107,6 +107,22 @@ do
             ln -sf ${!env_var}/${CONFFILE}/log  /${CONFFILE}/log
             continue
         fi 
+	if [[ ${item_name} = "mountdownload" ]]; then
+            loginfo_note "[Cloud Storage] Link ${!env_var}/ to /${CONFFILE}/download"
+            if [[ -d /${CONFFILE}/download ]];then
+                rm -fr /${CONFFILE}/download
+            fi
+            ln -sf ${!env_var}/  /${CONFFILE}/download
+	    continue
+        fi 
+	if [[ ${item_name} = "mountlogs" ]]; then
+            loginfo_note "[Cloud Storage] Link ${!env_var}/ to /${CONFFILE}/log"
+            if [[ -d /${CONFFILE}/log ]];then
+                rm -fr /${CONFFILE}/log
+            fi
+            ln -sf ${!env_var}/  /${CONFFILE}/log
+            continue
+        fi 
     fi
     if [[ $env_var =~ ^OMCONF_ ]]; then
         item_name=$(echo "$env_var" | cut -d_ -f2-)
