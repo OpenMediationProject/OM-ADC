@@ -20,6 +20,7 @@ public class ReportAccount {
     public String authKey; // admob证书重定向URL中唯一主键
     public int authType;
     public String reason;
+    public int status;
 
     public int getId() {
         return id;
@@ -115,5 +116,14 @@ public class ReportAccount {
 
     public void setReason(String reason) {
         this.reason = reason;
+    }
+
+    public int getStatus() {
+        return status;
+    }
+
+    public ReportAccount setStatus(int status) {
+        this.status = status;
+        return this;
     }
 }

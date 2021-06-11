@@ -3,6 +3,7 @@
 
 package com.adtiming.om.adc.service;
 
+import com.adtiming.om.adc.dto.ReportAccount;
 import com.adtiming.om.adc.dto.ReportAdnData;
 import com.adtiming.om.adc.dto.ReportApiError;
 import com.adtiming.om.adc.dto.ReportTask;
@@ -165,6 +166,7 @@ public abstract class AdnBaseService {
             sql = "UPDATE report_adnetwork_task set status=? WHERE id=?";
             jdbcTemplateW.update(sql, status, id);
         } else {
+            updateAccountStatus(id, status, msg);
             if (StringUtils.isBlank(msg)) {
                 sql = "UPDATE report_adnetwork_task SET status=?,run_count=run_count+1 WHERE id=?";
                 jdbcTemplateW.update(sql, status, id);
@@ -172,6 +174,20 @@ public abstract class AdnBaseService {
                 sql = String.format("UPDATE report_adnetwork_task SET status=?,msg=concat(ifnull(msg,''), '\n', '%s'),run_count=run_count+1 WHERE id=?", msg.replaceAll("'", "''"));
                 jdbcTemplateW.update(sql, status, id);
             }
+        }
+    }
+
+    private void updateAccountStatus(int taskId, int status, String msg) {
+        try {
+            if (status == 2) {
+                ReportAccount account = jdbcTemplate.queryForObject("select b.*,a.run_count from report_adnetwork_task a left join report_adnetwork_account b on (a.report_account_id=b.id) where a.id=?", ReportAccount.ROWMAPPER, taskId);
+                //Update the account status to "Active" and clear the error message in case of Verifying passed or original error
+                if (account.status == -1 || StringUtils.isNoneBlank(account.reason)) {
+                    jdbcTemplate.update("update report_adnetwork_account set status=1, reason='',error_id=0 where id=?", account.id);
+                }
+            }
+        } catch (Exception e) {
+            LOG.error("update verifying account status error", e);
         }
     }
 
