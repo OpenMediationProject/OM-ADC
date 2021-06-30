@@ -108,7 +108,7 @@ public class DownloadVungle extends AdnBaseService {
             updateReqUrl(jdbcTemplate, taskId, url);
             HttpGet httpGet = new HttpGet(url);
             httpGet.setConfig(RequestConfig.custom().setCookieSpec(CookieSpecs.IGNORE_COOKIES).setProxy(cfg.httpProxy).build());
-            httpGet.setHeader("Authorization", "Bearer" + apiKey + "");
+            httpGet.setHeader("Authorization", "Bearer " + apiKey + "");
             httpGet.setHeader("Vungle-Version", "1");
             httpGet.setHeader("Accept", "application/json");
             HttpResponse response = MyHttpClient.getInstance().execute(httpGet);
