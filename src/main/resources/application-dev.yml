@@ -2,9 +2,9 @@ app:
   env: dev
 
 logging:
-  config: classpath:log4j2-prod.xml
+  config: classpath:log4j2-dev.xml
 
-http.proxy:
+http.proxy: 172.20.5.30:8889
 auth:
   dir: auth
   #like 'localhost:19013/api'
@@ -18,6 +18,12 @@ spring:
   ## datasource
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://xxx/open_mediation?useCursorFetch=true&characterEncoding=utf8&useSSL=true&requireSSL=false
+    url: jdbc:mysql://xxx/open_mediation?useCursorFetch=true&characterEncoding=utf8&useSSL=true&requireSSL=false&serverTimezone=GMT
     username: xxx
     password: xxxxx
+    dbcp2:
+      max-total: 320
+      min-idle: 5
+  jdbc:
+    template:
+      fetch-size: 1000

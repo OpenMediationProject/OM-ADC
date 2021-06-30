@@ -155,6 +155,7 @@ public class BaseTask {
             case 9://Mopub
             case 11://Tapjoy
             case 14://Mintegral
+            case 23://PubNative
                 keyField = "adn_api_key";
                 break;
             default:
@@ -179,6 +180,7 @@ public class BaseTask {
                 break;
             case 4://Unity
             case 5://Vungle
+            case 23://PubNative
                 fileds = new String[]{"adn_api_key"};
                 break;
             case 8://AppLovin

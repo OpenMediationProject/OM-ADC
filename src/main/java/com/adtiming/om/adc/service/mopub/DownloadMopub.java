@@ -27,11 +27,9 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class DownloadMopub extends AdnBaseService {
@@ -64,30 +62,30 @@ public class DownloadMopub extends AdnBaseService {
     }
 
     private void executeMopubTask(ReportTask task) {
-        String appKey = task.adnAppId;
-        String apiKey = task.adnApiKey;
+        String apiKey = task.adnAppId;
+        String reportKey = task.adnApiKey;
         String day = task.day;
         // Set up AdSense Management API client.
-        if (StringUtils.isBlank(appKey) || StringUtils.isBlank(apiKey)) {
+        if (StringUtils.isBlank(apiKey) || StringUtils.isBlank(reportKey)) {
             LOG.error("Mopub，appKey or reportKey is null");
             return;
         }
-        LOG.info("[Mopub] executeTaskImpl start, apiKey:{}, day:{}", appKey, day);
+        LOG.info("[Mopub] executeTaskImpl start, apiKey:{}, day:{}", apiKey, day);
         long start = System.currentTimeMillis();
         updateTaskStatus(jdbcTemplate, task.id, 1, "");
         StringBuilder err = new StringBuilder();
         String error;
         task.step = 1;
-        String file_path = downCsvFile(task.id, appKey, apiKey, day, err);
+        String file_path = downCsvFile(task.id, apiKey, reportKey, day, err);
         if (StringUtils.isNotBlank(file_path) && err.length() == 0) {
             task.step = 2;
-            error = readCsvFile(file_path, day, appKey, apiKey);
+            error = readCsvFile(file_path, day, apiKey, reportKey);
             if (StringUtils.isBlank(error)) {
                 task.step = 3;
-                error = savePrepareReportData(task, day, appKey);
+                error = savePrepareReportData(task, day, apiKey);
                 if (StringUtils.isBlank(error)) {
                     task.step = 4;
-                    error = reportLinkedToStat(task, appKey);
+                    error = reportLinkedToStat(task, apiKey);
                 }
             }
         } else {
@@ -101,17 +99,17 @@ public class DownloadMopub extends AdnBaseService {
         } else {
             updateTaskStatus(jdbcTemplate, task.id, status, error);
         }
-        LOG.info("[Mopub] executeTaskImpl end, appKey:{}, apiKey:{}, day:{}, cost:{}", appKey, apiKey, day, System.currentTimeMillis() - start);
+        LOG.info("[Mopub] executeTaskImpl end, appKey:{}, apiKey:{}, day:{}, cost:{}", apiKey, reportKey, day, System.currentTimeMillis() - start);
     }
 
-    private String downCsvFile(int taskId, String appKey, String apiKey, String day, StringBuilder err) {
+    private String downCsvFile(int taskId, String apiKey, String reportKey, String day, StringBuilder err) {
         String filePath = "";
         HttpEntity entity = null;
-        LOG.info("[Mopub] downCsvFile start, taskId:{}, appKey:{}, apiKey:{}, day:{}", taskId, appKey, apiKey, day);
+        LOG.info("[Mopub] downCsvFile start, taskId:{}, appKey:{}, apiKey:{}, day:{}", taskId, apiKey, reportKey, day);
         long start = System.currentTimeMillis();
         try {
             String url = "https://app.mopub.com/reports/custom/api/download_report?" +
-                    "report_key=" + apiKey + "&api_key=" + appKey + "&date=" + day;
+                    "report_key=" + reportKey + "&api_key=" + apiKey + "&date=" + day;
             updateReqUrl(jdbcTemplate, taskId, url);
             HttpGet httpGet = new HttpGet(url);
             httpGet.setConfig(RequestConfig.custom().setCookieSpec(CookieSpecs.IGNORE_COOKIES).setProxy(cfg.httpProxy).build());
@@ -132,7 +130,7 @@ public class DownloadMopub extends AdnBaseService {
             if (entity.isStreaming()) {
                 try (InputStream instream = entity.getContent()) {
                     if (instream != null) {
-                        String path = String.format("/mopub/mopub-%s-%s.csv", day, appKey);
+                        String path = String.format("/mopub/mopub-%s-%s.csv", day, apiKey);
                         File dst = new File(downloadDir, path);
                         File dst_dir = dst.getParentFile();
                         FileUtils.forceMkdir(dst_dir);
@@ -149,57 +147,57 @@ public class DownloadMopub extends AdnBaseService {
         } finally {
             EntityUtils.consumeQuietly(entity);
         }
-        LOG.info("[Mopub] downCsvFile end, taskId:{}, appKey:{}, apiKey:{}, day:{}, cost:{}", taskId, appKey, apiKey, day, System.currentTimeMillis() - start);
+        LOG.info("[Mopub] downCsvFile end, taskId:{}, appKey:{}, apiKey:{}, day:{}, cost:{}", taskId, apiKey, reportKey, day, System.currentTimeMillis() - start);
         return filePath;
     }
 
-    private String readCsvFile(String csvFilePath, String day, String appKey, String apiKey) {
-        String fileEncoder = "UTF-8";
+    private String readCsvFile(String csvFilePath, String day, String apiKey, String reportKey) {
         BufferedReader in = null;
         String sql_delete = "delete from report_mopub where day=? and app_key=?";
         String error = "";
-        LOG.info("[Mopub] readCsvFile start, appKey:{}, apiKey:{}, day:{}", appKey, apiKey, day);
+        LOG.info("[Mopub] readCsvFile start, appKey:{}, apiKey:{}, day:{}", apiKey, reportKey, day);
         long start = System.currentTimeMillis();
         try {
-            jdbcTemplate.update(sql_delete, day, appKey);
+            jdbcTemplate.update(sql_delete, day, apiKey);
         } catch (Exception e) {
             return String.format("delete report_mopub error, msg:%s", e.getMessage());
         }
 
         try {
-            String insertSql = "INSERT into report_mopub (day,app,app_id,adunit,adunit_id,adunit_format,country," +
-                    "device,platform,requests,impressions,clicks,conversions,revenue,ctr,app_key)  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
-            in = new BufferedReader(new InputStreamReader(new FileInputStream(csvFilePath), fileEncoder));
+            String sql_insert = "INSERT into report_mopub (day,app,app_id,adunit,adunit_id,adunit_format,country," +
+                    "device,platform,sdk_version,adgroup_network_type,requests,fills,impressions,clicks,revenue,app_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            in = new BufferedReader(new InputStreamReader(new FileInputStream(csvFilePath), StandardCharsets.UTF_8));
             String rec;
             int count = 0;
             List<Object[]> lsParm = new ArrayList<>(1000);
+            //0:SDK Version,1:Adgroup Network Type,2:Day,3:App Name,4:App ID,5:Adunit Name,6:Adunit ID,7:Adunit Format,8:Country,9:Device Model,10:OS,11:Adserver Requests,12:Adserver Attempts,13:Adserver Impressions,14:Adserver Clicks,15:Adserver Revenue,16:CTR,17:Fill Rate (Inventory),18:Fill Rate (Demand),19:Show Rate (Inventory),20:Show Rate (Demand),21:Fills
+            List<Integer> needIndexs = Arrays.asList(2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 1, 11, 21, 13, 14, 15);
             while ((rec = in.readLine()) != null) {
                 count++;
                 if (count > 1) {
                     if (",".equals(rec.substring(rec.length() - 1)))
                         rec = rec + "0";
-                    Object[] arr = rec.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)", -1);//双引号内的逗号不分割 双引号外的逗号进行分割
-                    Object[] params = new Object[arr.length + 1];
-                    for (int i = 0; i < arr.length; i++) {
-                        if (i == 0) {
-                            params[0] = arr[0].toString();
-                            params[arr.length] = appKey;
-                        }
-                        if (params[i] == null || "".equals(arr[i].toString().replace("\"", "")))
+                    String[] arr = rec.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)", -1);//双引号内的逗号不分割 双引号外的逗号进行分割
+                    Object[] params = new Object[17];
+                    params[params.length - 1] = apiKey;
+                    for (int i = 0; i < needIndexs.size(); i++) {
+                        String val = arr[needIndexs.get(i)].replace("\"", "");
+                        if (StringUtils.isNoneBlank(val)) {
+                            params[i] = val;
+                        } else {
                             params[i] = 0;
-                        if (i != 0)
-                            params[i] = arr[i].toString().replace("\"", "");
+                        }
                     }
                     lsParm.add(params);
                     if (lsParm.size() == 1000) {
-                        jdbcTemplate.batchUpdate(insertSql, lsParm);
+                        jdbcTemplate.batchUpdate(sql_insert, lsParm);
                         lsParm.clear();
                         count = 1;
                     }
                 }
             }
             if (!lsParm.isEmpty()) {
-                jdbcTemplate.batchUpdate(insertSql, lsParm);
+                jdbcTemplate.batchUpdate(sql_insert, lsParm);
             }
         } catch (IOException e) {
             error = String.format("read csv error, msg:%s", e.getMessage());
@@ -208,25 +206,16 @@ public class DownloadMopub extends AdnBaseService {
         } finally {
             IOUtils.closeQuietly(in);
         }
-        LOG.info("[Mopub] readCsvFile end, appKey:{}, apiKey:{}, day:{}, cost:{}", appKey, apiKey, day, System.currentTimeMillis() - start);
+        LOG.info("[Mopub] readCsvFile end, appKey:{}, apiKey:{}, day:{}, cost:{}", apiKey, reportKey, day, System.currentTimeMillis() - start);
         return error;
     }
 
-    private String savePrepareReportData(ReportTask task, String reportDay, String appKey) {
+    private String savePrepareReportData(ReportTask task, String reportDay, String apiKey) {
         LOG.info("[Mopub] savePrepareReportData start, taskId:{}", task.id);
         long start = System.currentTimeMillis();
         String error;
         try {
             List<Map<String, Object>> instanceInfoList = getInstanceList(task.reportAccountId);
-            /*Map<String, Map<String, Object>> placements = instanceInfoList.stream().collect(Collectors.toMap(m -> MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue));
-
-            // instance's placement_key changed
-            Set<Integer> insIds = instanceInfoList.stream().map(o->MapHelper.getInt(o, "instance_id")).collect(Collectors.toSet());
-            List<Map<String, Object>> oldInstanceList = getOldInstanceList(insIds);
-            if (!oldInstanceList.isEmpty()) {
-                placements.putAll(oldInstanceList.stream().collect(Collectors.toMap(m ->
-                        MapHelper.getString(m, "placement_key"), m -> m, (existingValue, newValue) -> existingValue)));
-            }*/
             if (instanceInfoList.isEmpty()) {
                 return "instance is null";
             }
@@ -237,16 +226,16 @@ public class DownloadMopub extends AdnBaseService {
                 putLinkKeyMap(placements, key, ins, dataDay);
             }
 
-            String dataSql = "select day,country,platform,adunit_id data_key,sum(requests) AS api_request,sum(impressions) AS api_impr," +
+            String dataSql = "select day,country,platform,adunit_id data_key,sum(requests) AS api_request,sum(fills) api_filled,sum(impressions) AS api_impr," +
                     "sum(clicks) AS api_click,sum(revenue) AS revenue " +
-                    "  from report_mopub where day=? and app_key=? group by day,country,adunit_id" +
+                    "  from report_mopub where day=? and app_key=? group by day,country,adunit_id,platform" +
                     " order by adunit_id";
 
-            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, appKey);
+            List<ReportAdnData> oriDataList = jdbcTemplate.query(dataSql, ReportAdnData.ROWMAPPER, reportDay, apiKey);
 
             if (oriDataList.isEmpty())
                 return "data is null";
-            error = toAdnetworkLinked(task, appKey, placements, oriDataList);
+            error = toAdnetworkLinked(task, apiKey, placements, oriDataList);
         } catch (Exception e) {
             error = String.format("savePrepareReportData error, msg:%s", e.getMessage());
         }

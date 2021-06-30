@@ -12,9 +12,12 @@ import com.adtiming.om.adc.service.chartboost.RequestChartboost;
 import com.adtiming.om.adc.service.facebook.RequestFacebook;
 import com.adtiming.om.adc.service.helium.RequestHelium;
 import com.adtiming.om.adc.service.ironsource.RequestIronSource;
+import com.adtiming.om.adc.service.kuaishou.RequestKuaiShou;
 import com.adtiming.om.adc.service.mint.RequestMint;
 import com.adtiming.om.adc.service.mintegral.RequestMintegral;
 import com.adtiming.om.adc.service.mopub.RequestMopub;
+import com.adtiming.om.adc.service.pubnative.RequestPubNative;
+import com.adtiming.om.adc.service.sigmob.RequestSigmob;
 import com.adtiming.om.adc.service.tapjoy.RquestTapjoy;
 import com.adtiming.om.adc.service.tencent.RequestTencent;
 import com.adtiming.om.adc.service.tiktok.RequestTikTok;
@@ -75,6 +78,15 @@ public class APIController extends BaseController {
 
     @Resource
     private RequestHelium helium;
+
+    @Resource
+    private RequestKuaiShou kuaiShou;
+
+    @Resource
+    private RequestSigmob sigmob;
+
+    @Resource
+    private RequestPubNative pubNative;
 
     @RequestMapping("/test")
     public Object test() {
@@ -367,11 +379,32 @@ public class APIController extends BaseController {
                         mint.rebuild(day);
                     }
                     break;
+                case 20:
+                    if (id != null && id >0) {
+                        sigmob.rebuild(day, id);
+                    } else {
+                        sigmob.rebuild(day);
+                    }
+                    break;
+                case 21:
+                    if (id != null && id >0) {
+                        kuaiShou.rebuild(day, id);
+                    } else {
+                        kuaiShou.rebuild(day);
+                    }
+                    break;
+                case 23:
+                    if (id != null && id >0) {
+                        pubNative.rebuild(day, id);
+                    } else {
+                        pubNative.rebuild(day);
+                    }
+                    break;
                 default:
                     break;
             }
         } catch (Exception e) {
-            Response.build().code(500).msg(e.getMessage());
+            return Response.build().code(500).msg(e.getMessage());
         }
         return Response.build();
     }
