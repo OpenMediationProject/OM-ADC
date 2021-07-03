@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
@@ -343,12 +344,15 @@ public abstract class AdnBaseService {
 
     private BigDecimal getCurrencyByDay(String currency, String day) {
         try {
-            return jdbcTemplate.queryForObject("SELECT exchange_rate FROM om_currency_exchange_day WHERE day=? AND cur_from=?", BigDecimal.class, day, currency);
-        } catch (Exception e) {
-            try {
-                return jdbcTemplate.queryForObject("SELECT exchange_rate FROM om_currency_exchange WHERE cur_from=?", BigDecimal.class, day, currency);
-            } catch (Exception ignored) {
+            List<BigDecimal> list = jdbcTemplate.queryForList("SELECT exchange_rate FROM om_currency_exchange_day WHERE day=? AND cur_from=?", BigDecimal.class, day, currency);
+            if (CollectionUtils.isEmpty(list)) {
+                list = jdbcTemplate.queryForList("SELECT exchange_rate FROM om_currency_exchange WHERE cur_from=?", BigDecimal.class, currency);
             }
+            if (!CollectionUtils.isEmpty(list)) {
+                return list.get(0);
+            }
+        } catch (Exception e) {
+            LOG.error("getCurrencyByDay error", e);
         }
         return new BigDecimal(1);
     }
