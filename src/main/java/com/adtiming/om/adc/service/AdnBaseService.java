@@ -15,7 +15,6 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
@@ -344,15 +343,12 @@ public abstract class AdnBaseService {
 
     private BigDecimal getCurrencyByDay(String currency, String day) {
         try {
-            List<BigDecimal> list = jdbcTemplate.queryForList("SELECT exchange_rate FROM om_currency_exchange_day WHERE day=? AND cur_from=?", BigDecimal.class, day, currency);
-            if (CollectionUtils.isEmpty(list)) {
-                list = jdbcTemplate.queryForList("SELECT exchange_rate FROM om_currency_exchange WHERE cur_from=?", BigDecimal.class, currency);
-            }
-            if (!CollectionUtils.isEmpty(list)) {
-                return list.get(0);
-            }
+            return jdbcTemplate.queryForObject("SELECT exchange_rate FROM om_currency_exchange_day WHERE day=? AND cur_from=?", BigDecimal.class, day, currency);
         } catch (Exception e) {
-            LOG.error("getCurrencyByDay error", e);
+            try {
+                return jdbcTemplate.queryForObject("SELECT exchange_rate FROM om_currency_exchange WHERE cur_from=?", BigDecimal.class, day, currency);
+            } catch (Exception ignored) {
+            }
         }
         return new BigDecimal(1);
     }
@@ -377,8 +373,8 @@ public abstract class AdnBaseService {
                 whereSql = task.timeDimension == 0 ? "and hour=" + task.hour : "";
             }
 
-            String deleteSql = String.format("DELETE FROM report_adnetwork_linked WHERE adn_id=? AND day=? AND adn_account_key=? %s", whereSql);
-            jdbcTemplate.update(deleteSql, adnId, task.day, adnAccountKey);
+            String deleteSql = String.format("DELETE FROM report_adnetwork_linked WHERE adn_id=? AND day=? AND report_account_id=? %s", whereSql);
+            jdbcTemplate.update(deleteSql, adnId, task.day, task.reportAccountId);
             int count = 0;
             List<Object[]> lsParm = new ArrayList<>();
             String insertSql = "INSERT INTO report_adnetwork_linked(day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,currency,exchange_rate,cost,cost_ori,revenue,revenue_ori,api_request,api_filled,api_click,api_impr,api_video_start,api_video_complete,adn_account_key,adn_app_key,adn_placement_key,report_account_id,bid)" +
@@ -457,8 +453,8 @@ public abstract class AdnBaseService {
             if (adnId == 3) {
                 whereSql = task.timeDimension == 0 ? "and hour=" + task.hour : "";
             }
-            String sql = "DELETE FROM stat_adnetwork WHERE adn_id=? AND day=? AND adn_account_key=? " + whereSql;
-            jdbcTemplate.update(sql, adnId, task.day, accountKey);
+            String sql = "DELETE FROM stat_adnetwork WHERE adn_id=? AND day=? AND report_account_id=? " + whereSql;
+            jdbcTemplate.update(sql, adnId, task.day, task.reportAccountId);
             sql = String.format("INSERT INTO stat_adnetwork(day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,currency,exchange_rate,cost,cost_ori,revenue,revenue_ori,api_request,api_filled,api_click,api_impr,api_video_start,api_video_complete,adn_account_key,report_account_id,bid)" +
                     "SELECT day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type," +
                     "adn_id,instance_id,abt,currency,exchange_rate," +
@@ -469,9 +465,9 @@ public abstract class AdnBaseService {
                     "sum(api_click) api_click,sum(api_impr) api_impr,sum(api_video_start) api_video_start," +
                     "sum(api_video_complete) api_video_complete,adn_account_key,report_account_id,bid" +
                     " FROM report_adnetwork_linked" +
-                    " WHERE adn_id=? AND day=? %s AND adn_account_key=?" +
+                    " WHERE adn_id=? AND day=? %s AND report_account_id=?" +
                     " GROUP BY day,hour,country,platform,publisher_id,pub_app_id,placement_id,ad_type,adn_id,instance_id,abt,currency,exchange_rate,adn_account_key,bid", whereSql);
-            jdbcTemplate.update(sql, adnId, task.day, accountKey);
+            jdbcTemplate.update(sql, adnId, task.day, task.reportAccountId);
         } catch (Exception e) {
             error = String.format("reportLinkedToStat error, msg:%s", e.getMessage());
         }
