@@ -4,7 +4,7 @@ app:
 logging:
   config: classpath:log4j2-dev.xml
 
-http.proxy: 172.20.5.30:8889
+http.proxy:
 auth:
   dir: auth
   #like 'localhost:19013/api'
