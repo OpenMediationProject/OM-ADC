@@ -142,6 +142,7 @@ public class BaseTask {
                 keyField = "user_id";
                 break;
             case 3://facebook
+            case 27://SHAREit
                 keyField = "adn_app_id";
                 break;
             case 1://adtiming
@@ -176,6 +177,7 @@ public class BaseTask {
                 fileds = new String[]{"user_id", "adn_app_token"};
                 break;
             case 3://facebook
+            case 27://SHAREit
                 fileds = new String[]{"adn_app_id", "adn_app_token"};
                 break;
             case 4://Unity

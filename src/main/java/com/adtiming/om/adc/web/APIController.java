@@ -17,6 +17,7 @@ import com.adtiming.om.adc.service.mint.RequestMint;
 import com.adtiming.om.adc.service.mintegral.RequestMintegral;
 import com.adtiming.om.adc.service.mopub.RequestMopub;
 import com.adtiming.om.adc.service.pubnative.RequestPubNative;
+import com.adtiming.om.adc.service.shareit.RequestSharEit;
 import com.adtiming.om.adc.service.sigmob.RequestSigmob;
 import com.adtiming.om.adc.service.tapjoy.RquestTapjoy;
 import com.adtiming.om.adc.service.tencent.RequestTencent;
@@ -87,6 +88,9 @@ public class APIController extends BaseController {
 
     @Resource
     private RequestPubNative pubNative;
+
+    @Resource
+    private RequestSharEit sharEit;
 
     @RequestMapping("/test")
     public Object test() {
@@ -398,6 +402,12 @@ public class APIController extends BaseController {
                         pubNative.rebuild(day, id);
                     } else {
                         pubNative.rebuild(day);
+                    }
+                case 27:
+                    if (id != null && id >0) {
+                        sharEit.rebuild(day, id);
+                    } else {
+                        sharEit.rebuild(day);
                     }
                     break;
                 default:
